@@ -1,0 +1,17 @@
+# Build
+bin/
+obj/
+
+# IDE
+.vs/
+.idea/
+*.user
+
+# Wyniki testów
+TestResults/
+
+# Notatki robocze - tylko lokalnie
+NOTATKI.md
+
+# Treść zadania rekrutacyjnego - materiał pracodawcy, nie publikujemy
+*.pdf

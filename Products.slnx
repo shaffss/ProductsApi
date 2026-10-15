@@ -1,0 +1,20 @@
+<Solution>
+  <!-- Products.Api pierwszy: Visual Studio bez zapisanych ustawień uruchamia pierwszy projekt -->
+  <Folder Name="/src/">
+    <Project Path="src/Products.Api/Products.Api.csproj" />
+    <Project Path="src/Products.Core/Products.Core.csproj" />
+    <Project Path="src/Products.Infrastructure/Products.Infrastructure.csproj" />
+    <Project Path="src/Products.Migrations.Postgres/Products.Migrations.Postgres.csproj" />
+    <Project Path="src/Products.Migrations.SqlServer/Products.Migrations.SqlServer.csproj" />
+    <Project Path="src/Products.Persistence.Dapper/Products.Persistence.Dapper.csproj" />
+    <Project Path="src/Products.Persistence.EfCore/Products.Persistence.EfCore.csproj" />
+    <Project Path="src/Products.Persistence/Products.Persistence.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/Products.IntegrationTests/Products.IntegrationTests.csproj" />
+    <Project Path="tests/Products.UnitTests/Products.UnitTests.csproj" />
+  </Folder>
+  <Folder Name="/benchmarks/">
+    <Project Path="benchmarks/Products.Benchmarks/Products.Benchmarks.csproj" />
+  </Folder>
+</Solution>

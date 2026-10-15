@@ -1,0 +1,6 @@
+# Końce linii LF w repozytorium i w kopii roboczej na każdym systemie (jak w .editorconfig) -
+# dotnet format --verify-no-changes w CI nie zgłasza różnic po sklonowaniu na Windows
+* text=auto eol=lf
+
+# cmd.exe z samymi LF potrafi źle czytać pliki wsadowe
+*.cmd text eol=crlf
