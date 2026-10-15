@@ -1,0 +1,190 @@
+name: rekrutacja
+
+# Hasła wyłącznie dla lokalnych kontenerów deweloperskich (nie produkcyjne) - jawne, żeby całość
+# działała bez ręcznej konfiguracji. Te same wartości są w appsettings.Development.json API.
+#
+# docker compose up -d   -> infrastruktura + 4 warianty API (ORM x baza):
+#   http://localhost:8081  EfCore + Postgres     http://localhost:8083  Dapper + Postgres
+#   http://localhost:8082  EfCore + SqlServer    http://localhost:8084  Dapper + SqlServer
+#   http://localhost:18888 Aspire Dashboard - ślady, metryki i logi wszystkich wariantów (OpenTelemetry)
+# Kontenery API same stosują migracje EF przy starcie (Database__MigrateOnStartup). Bazy zakładane są wcześniej
+# (postgres: POSTGRES_DB, SQL Server: jednorazowy sqlserver-init) - dwa warianty na jednej bazie nie tworzą jej
+# naraz, a migracje EF wykonuje jeden z nich pod blokadą w bazie.
+# Wersje obrazów przypięte - to samo środowisko przy każdym uruchomieniu.
+
+x-api: &api
+  build:
+    context: .
+    dockerfile: src/Products.Api/Dockerfile
+  image: rekrutacja-products-api
+  depends_on:
+    sqlserver-init: { condition: service_completed_successfully } # migracje przy starcie wymagają gotowej bazy
+    postgres: { condition: service_healthy }
+    redis: { condition: service_started } # bez Redisa i Kafki API działa (Degraded) i łączy się w tle
+    kafka: { condition: service_started }
+  restart: unless-stopped
+  # SIGTERM -> łagodne zamknięcie (offsety Kafki, wysyłka w toku); dłużej niż ShutdownTimeout .NET (30 s)
+  stop_grace_period: 40s
+
+x-api-environment: &api-environment
+  ASPNETCORE_ENVIRONMENT: Development # Swagger pod /swagger
+  Database__MigrateOnStartup: "true"
+  ConnectionStrings__SqlServer: Server=sqlserver,1433;Database=Products;User Id=sa;Password=LocalDev_Passw0rd;TrustServerCertificate=True
+  # GSS Encryption Mode=Disable: obraz chiseled nie ma bibliotek Kerberos - bez tego Npgsql próbuje szyfrowania GSS
+  # i wypisuje błąd libgssapi_krb5.so.2 (połączenie i tak działa)
+  ConnectionStrings__Postgres: Host=postgres;Port=5432;Database=products;Username=postgres;Password=LocalDev_Passw0rd;GSS Encryption Mode=Disable
+  ConnectionStrings__Redis: redis:6379
+  Kafka__BootstrapServers: kafka:9092
+  OTEL_EXPORTER_OTLP_ENDPOINT: http://aspire-dashboard:18889
+
+services:
+  sqlserver:
+    image: mcr.microsoft.com/mssql/server:2025-CU9-GDR1-ubuntu-24.04
+    container_name: sqlserver
+    environment:
+      ACCEPT_EULA: "Y"
+      MSSQL_PID: Developer
+      MSSQL_SA_PASSWORD: LocalDev_Passw0rd
+      MSSQL_MEMORY_LIMIT_MB: 2048 # domyślnie do 80% pamięci Dockera - zostawia miejsce dla Postgresa (benchmarki)
+    ports:
+      - "1433:1433"
+    volumes:
+      - sqlserver-data:/var/opt/mssql
+    healthcheck:
+      test: ["CMD-SHELL", "/opt/mssql-tools18/bin/sqlcmd -S localhost -U sa -P LocalDev_Passw0rd -C -b -Q 'SELECT 1' -o /dev/null"]
+      interval: 5s
+      timeout: 5s
+      retries: 30
+    restart: unless-stopped
+    stop_grace_period: 30s # checkpoint przy zamknięciu - bez odtwarzania dziennika przy kolejnym starcie
+
+  # Jednorazowo: baza Products z READ_COMMITTED_SNAPSHOT, zanim wystartują API (skrypt idempotentny)
+  sqlserver-init:
+    image: mcr.microsoft.com/mssql/server:2025-CU9-GDR1-ubuntu-24.04
+    container_name: sqlserver-init
+    depends_on:
+      sqlserver: { condition: service_healthy }
+    volumes:
+      - ./db/sqlserver/Create/000_database.sql:/init/000_database.sql:ro
+    entrypoint: ["/opt/mssql-tools18/bin/sqlcmd", "-S", "sqlserver", "-U", "sa", "-P", "LocalDev_Passw0rd", "-C", "-b", "-i", "/init/000_database.sql"]
+    restart: "no"
+
+  postgres:
+    image: postgres:18.6
+    container_name: postgres
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: LocalDev_Passw0rd
+      POSTGRES_DB: products # baza zakładana przy inicjalizacji, zanim wystartują API
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres-data:/var/lib/postgresql
+    healthcheck:
+      # przez TCP: w czasie inicjalizacji serwer słucha tylko na sockecie - gotowy dopiero po założeniu bazy
+      test: ["CMD-SHELL", "pg_isready -U postgres -h localhost"]
+      interval: 5s
+      timeout: 5s
+      retries: 30
+    restart: unless-stopped
+    stop_grace_period: 30s # checkpoint przy zamknięciu
+
+  kafka:
+    image: apache/kafka:4.3.1
+    container_name: rekrutacja-kafka
+    environment:
+      KAFKA_NODE_ID: 1
+      KAFKA_PROCESS_ROLES: broker,controller
+      KAFKA_CONTROLLER_QUORUM_VOTERS: 1@kafka:9093
+      KAFKA_LISTENERS: INTERNAL://:9092,CONTROLLER://:9093,EXTERNAL://:9094
+      KAFKA_ADVERTISED_LISTENERS: INTERNAL://kafka:9092,EXTERNAL://localhost:9094
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: INTERNAL:PLAINTEXT,CONTROLLER:PLAINTEXT,EXTERNAL:PLAINTEXT
+      KAFKA_INTER_BROKER_LISTENER_NAME: INTERNAL
+      KAFKA_CONTROLLER_LISTENER_NAMES: CONTROLLER
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 1
+      KAFKA_HEAP_OPTS: -Xmx512m -Xms512m # domyślnie 1 GB heapu - lokalnie wystarczy mniej
+      # dane na wolumenie kafka-data; domyślnie /tmp/kafka-logs w kontenerze - topic i offsety ginęły przy odtworzeniu
+      KAFKA_LOG_DIRS: /var/lib/kafka/data
+    ports:
+      - "9094:9094" # z hosta (dotnet run): localhost:9094; z kontenerów: kafka:9092
+    volumes:
+      - kafka-data:/var/lib/kafka/data
+    restart: unless-stopped
+    stop_grace_period: 30s # kontrolowane zamknięcie brokera (zapis logów i indeksów)
+
+  redis:
+    image: redis:8.10.2
+    container_name: redis
+    # Czysty cache bez zapisu na dysk: po restarcie pusty, więc nie przywróci wpisów, których unieważnienie
+    # nie doszło do skutku w czasie awarii. Limit pamięci z wypieraniem najdawniej używanych kluczy (LRU) -
+    # pełny cache usuwa stare wpisy zamiast odrzucać zapisy.
+    command: ["redis-server", "--save", "", "--appendonly", "no", "--maxmemory", "256mb", "--maxmemory-policy", "allkeys-lru"]
+    ports:
+      - "6379:6379"
+    restart: unless-stopped
+
+  # Podgląd OpenTelemetry (ślady od żądania HTTP przez outbox i Kafkę do konsumenta, metryki, logi).
+  # Bez logowania - tylko lokalnie.
+  aspire-dashboard:
+    image: mcr.microsoft.com/dotnet/aspire-dashboard:13.6.1
+    container_name: aspire-dashboard
+    environment:
+      ASPIRE_DASHBOARD_UNSECURED_ALLOW_ANONYMOUS: "true"
+    ports:
+      - "18888:18888" # UI
+      - "4317:18889" # OTLP (gRPC) z hosta, np. dotnet run; z kontenerów: aspire-dashboard:18889
+    restart: unless-stopped
+
+  # Każdy wariant ma własną grupę konsumentów Kafki: loguje wszystkie zdarzenia (także z drugiej bazy),
+  # więc zmianę ceny widać w logu wariantu, przez który ją wykonano.
+  # Dwa warianty na jednej bazie współdzielą outbox - wysyła jeden naraz (blokada w bazie).
+  api-efcore-postgres:
+    <<: *api
+    container_name: api-efcore-postgres
+    ports: ["8081:8080"]
+    environment:
+      <<: *api-environment
+      Persistence__Orm: EfCore
+      Persistence__Database: Postgres
+      Kafka__ConsumerGroup: api-efcore-postgres
+      OTEL_SERVICE_NAME: api-efcore-postgres
+
+  api-efcore-sqlserver:
+    <<: *api
+    container_name: api-efcore-sqlserver
+    ports: ["8082:8080"]
+    environment:
+      <<: *api-environment
+      Persistence__Orm: EfCore
+      Persistence__Database: SqlServer
+      Kafka__ConsumerGroup: api-efcore-sqlserver
+      OTEL_SERVICE_NAME: api-efcore-sqlserver
+
+  api-dapper-postgres:
+    <<: *api
+    container_name: api-dapper-postgres
+    ports: ["8083:8080"]
+    environment:
+      <<: *api-environment
+      Persistence__Orm: Dapper
+      Persistence__Database: Postgres
+      Kafka__ConsumerGroup: api-dapper-postgres
+      OTEL_SERVICE_NAME: api-dapper-postgres
+
+  api-dapper-sqlserver:
+    <<: *api
+    container_name: api-dapper-sqlserver
+    ports: ["8084:8080"]
+    environment:
+      <<: *api-environment
+      Persistence__Orm: Dapper
+      Persistence__Database: SqlServer
+      Kafka__ConsumerGroup: api-dapper-sqlserver
+      OTEL_SERVICE_NAME: api-dapper-sqlserver
+
+volumes:
+  sqlserver-data:
+  postgres-data:
+  kafka-data:
