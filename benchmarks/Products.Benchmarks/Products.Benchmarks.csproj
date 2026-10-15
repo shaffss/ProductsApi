@@ -1,0 +1,9 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+  </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\..\src\Products.Persistence.Dapper\Products.Persistence.Dapper.csproj" />
+    <ProjectReference Include="..\..\src\Products.Persistence.EfCore\Products.Persistence.EfCore.csproj" />
+  </ItemGroup>
+</Project>
