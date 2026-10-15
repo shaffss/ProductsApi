@@ -1,0 +1,662 @@
+{
+  "info": {
+    "_postman_id": "5b0f3c1e-7a2d-4c1b-9e3f-2a6d8c4b1f70",
+    "name": "Products API",
+    "description": "Kolekcja do weryfikacji zadania. Środowiska (folder postman/environments) wskazują 4 warianty API z docker-compose (8081-8084) albo API uruchomione lokalnie (5032).\n\nFolder **1. Scenariusz z zadania** uruchom po kolei (Run folder) - każde żądanie ma testy. Folder **2. Walidacja i błędy** pokazuje odpowiedzi 400/404. Folder **3. Idempotencja, współbieżność, health** (też po kolei): Idempotency-Key przy tworzeniu, ETag/If-Match przy zmianie ceny, /health/live i /health/ready.\n\nZdarzenie z Kafki po zmianie ceny widać w logu kontenera wariantu, np.:\n`docker logs api-efcore-postgres | findstr \"Product price changed\"`\nŚlad żądania przez outbox i Kafkę do konsumenta: Aspire Dashboard http://localhost:18888",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    { "key": "baseUrl", "value": "http://localhost:8081" },
+    { "key": "productId", "value": "" },
+    { "key": "missingId", "value": "00000000-0000-0000-0000-00000000dead" },
+    { "key": "idempotencyKey", "value": "" },
+    { "key": "idempotentProductId", "value": "" }
+  ],
+  "item": [
+    {
+      "name": "1. Scenariusz z zadania",
+      "description": "Przykładowa weryfikacja z zadania: utworzenie produktu, odczyt z bazy i z cache, zmiana ceny, unieważnienie cache, zdarzenie w Kafce.",
+      "item": [
+        {
+          "name": "1.1 Stan aplikacji",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const health = pm.response.json();",
+                  "pm.test('200 OK', () => pm.response.to.have.status(200));",
+                  "pm.test('Healthy', () => pm.expect(health.status).to.eql('Healthy'));",
+                  "pm.test('Wariant: ' + health.variant, () => pm.expect(health.variant).to.be.a('string'));",
+                  "pm.test('Baza, Redis i Kafka sprawdzone', () => pm.expect(health.checks).to.have.all.keys('database', 'redis', 'kafka'));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": { "raw": "{{baseUrl}}/health", "host": ["{{baseUrl}}"], "path": ["health"] },
+            "description": "Stan aplikacji, działający wariant (ORM + baza) i stan zależności."
+          }
+        },
+        {
+          "name": "1.2 Utwórz produkt",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const product = pm.response.json();",
+                  "pm.test('201 Created', () => pm.response.to.have.status(201));",
+                  "pm.test('Nagłówek Location', () => pm.expect(pm.response.headers.get('Location')).to.eql('/api/products/' + product.id));",
+                  "pm.test('Dane produktu', () => {",
+                  "    pm.expect(product.name).to.eql('Czujnik temperatury');",
+                  "    pm.expect(product.price).to.eql(149.99);",
+                  "    pm.expect(product.currency).to.eql('PLN');",
+                  "    pm.expect(product.updatedAtUtc).to.match(/Z$/);",
+                  "});",
+                  "pm.collectionVariables.set('productId', product.id);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Czujnik temperatury\",\n  \"price\": 149.99,\n  \"currency\": \"PLN\"\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "url": { "raw": "{{baseUrl}}/api/products", "host": ["{{baseUrl}}"], "path": ["api", "products"] },
+            "description": "Id zapisywane w zmiennej kolekcji productId - używają go kolejne żądania."
+          }
+        },
+        {
+          "name": "1.3 Pobierz produkt - z bazy (MISS)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200 OK', () => pm.response.to.have.status(200));",
+                  "pm.test('X-Cache: MISS - odczyt z bazy, zapis do Redisa', () => pm.expect(pm.response.headers.get('X-Cache')).to.eql('MISS'));",
+                  "pm.test('Ten sam produkt', () => pm.expect(pm.response.json().id).to.eql(pm.collectionVariables.get('productId')));",
+                  "pm.test('ETag - wersja produktu', () => pm.expect(pm.response.headers.get('ETag')).to.eql('\"1\"'));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": { "raw": "{{baseUrl}}/api/products/{{productId}}", "host": ["{{baseUrl}}"], "path": ["api", "products", "{{productId}}"] },
+            "description": "Brak w cache: produkt z bazy, zapisany w Redisie pod kluczem product:{id} z TTL 5 min.\nPodgląd: docker exec redis redis-cli GET product:{id}"
+          }
+        },
+        {
+          "name": "1.4 Pobierz produkt ponownie - z cache (HIT)",
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": ["// zapis do Redisa jest asynchroniczny (nie opóźnia odpowiedzi) - chwila zapasu", "setTimeout(() => {}, 300);"]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200 OK', () => pm.response.to.have.status(200));",
+                  "pm.test('X-Cache: HIT - odpowiedź z Redisa, bez zapytania do bazy', () => pm.expect(pm.response.headers.get('X-Cache')).to.eql('HIT'));",
+                  "pm.test('Cena 149.99', () => pm.expect(pm.response.json().price).to.eql(149.99));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": { "raw": "{{baseUrl}}/api/products/{{productId}}", "host": ["{{baseUrl}}"], "path": ["api", "products", "{{productId}}"] }
+          }
+        },
+        {
+          "name": "1.5 Zmień cenę",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const product = pm.response.json();",
+                  "pm.test('200 OK', () => pm.response.to.have.status(200));",
+                  "pm.test('Nowa cena w odpowiedzi', () => {",
+                  "    pm.expect(product.price).to.eql(129.99);",
+                  "    pm.expect(product.currency).to.eql('PLN');",
+                  "    pm.expect(product.message).to.be.undefined;",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "PUT",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"price\": 129.99,\n  \"currency\": \"PLN\"\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/products/{{productId}}/price",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "products", "{{productId}}", "price"]
+            },
+            "description": "Zapis w bazie (z historią i zdarzeniem w outboxie) -> usunięcie product:{id} z Redisa -> ProductPriceChanged do Kafki.\nPo chwili w logu wariantu: Product price changed: productId=..., oldPrice=149.99, newPrice=129.99, currency=PLN"
+          }
+        },
+        {
+          "name": "1.6 Pobierz po zmianie - cache unieważniony (MISS)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200 OK', () => pm.response.to.have.status(200));",
+                  "pm.test('X-Cache: MISS - wpis usunięty po zmianie ceny', () => pm.expect(pm.response.headers.get('X-Cache')).to.eql('MISS'));",
+                  "pm.test('Nowa cena z bazy', () => pm.expect(pm.response.json().price).to.eql(129.99));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": { "raw": "{{baseUrl}}/api/products/{{productId}}", "host": ["{{baseUrl}}"], "path": ["api", "products", "{{productId}}"] }
+          }
+        },
+        {
+          "name": "1.7 Zmień cenę - bez zmian",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const product = pm.response.json();",
+                  "pm.test('200 OK', () => pm.response.to.have.status(200));",
+                  "pm.test('Komunikat: nic nie zapisano', () => pm.expect(product.message).to.include('unchanged'));",
+                  "pm.test('Produkt bez zmian', () => pm.expect(product.price).to.eql(129.99));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "PUT",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"price\": 129.99,\n  \"currency\": \"pln\"\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/products/{{productId}}/price",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "products", "{{productId}}", "price"]
+            },
+            "description": "Ta sama cena i waluta (kod waluty bez rozróżniania wielkości liter): bez zapisu, bez historii i bez zdarzenia - odpowiedź z polem message."
+          }
+        }
+      ]
+    },
+    {
+      "name": "2. Walidacja i błędy",
+      "item": [
+        {
+          "name": "Utwórz - cena 0 (400)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('400 Bad Request', () => pm.response.to.have.status(400));",
+                  "pm.test('Błąd ceny', () => pm.expect(pm.response.json().errors.price[0]).to.eql('Price must be greater than zero.'));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Czujnik temperatury\",\n  \"price\": 0,\n  \"currency\": \"PLN\"\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "url": { "raw": "{{baseUrl}}/api/products", "host": ["{{baseUrl}}"], "path": ["api", "products"] }
+          }
+        },
+        {
+          "name": "Utwórz - cena ujemna (400)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('400 Bad Request', () => pm.response.to.have.status(400));",
+                  "pm.test('Błąd ceny', () => pm.expect(pm.response.json().errors).to.have.property('price'));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Czujnik temperatury\",\n  \"price\": -10,\n  \"currency\": \"PLN\"\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "url": { "raw": "{{baseUrl}}/api/products", "host": ["{{baseUrl}}"], "path": ["api", "products"] }
+          }
+        },
+        {
+          "name": "Utwórz - więcej niż 2 miejsca po przecinku (400)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('400 Bad Request', () => pm.response.to.have.status(400));",
+                  "pm.test('Błąd ceny', () => pm.expect(pm.response.json().errors.price[0]).to.include('2 decimal places'));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Czujnik temperatury\",\n  \"price\": 149.999,\n  \"currency\": \"PLN\"\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "url": { "raw": "{{baseUrl}}/api/products", "host": ["{{baseUrl}}"], "path": ["api", "products"] }
+          }
+        },
+        {
+          "name": "Utwórz - pusta nazwa i nieobsługiwana waluta (400)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const errors = pm.response.json().errors;",
+                  "pm.test('400 Bad Request', () => pm.response.to.have.status(400));",
+                  "pm.test('Wszystkie błędne pola naraz', () => pm.expect(errors).to.have.all.keys('name', 'currency'));",
+                  "pm.test('Nieobsługiwana waluta', () => pm.expect(errors.currency[0]).to.eql(\"Currency 'GBP' is not supported.\"));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"   \",\n  \"price\": 10,\n  \"currency\": \"GBP\"\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "url": { "raw": "{{baseUrl}}/api/products", "host": ["{{baseUrl}}"], "path": ["api", "products"] }
+          }
+        },
+        {
+          "name": "Utwórz - niepoprawny JSON (400)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('400 Bad Request', () => pm.response.to.have.status(400));",
+                  "pm.test('Wskazane pole', () => pm.expect(pm.response.json().detail).to.include('$.price'));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Czujnik temperatury\",\n  \"price\": \"abc\",\n  \"currency\": \"PLN\"\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "url": { "raw": "{{baseUrl}}/api/products", "host": ["{{baseUrl}}"], "path": ["api", "products"] }
+          }
+        },
+        {
+          "name": "Zmień cenę - cena 0 (400)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('400 Bad Request', () => pm.response.to.have.status(400));",
+                  "pm.test('Błąd ceny', () => pm.expect(pm.response.json().errors).to.have.property('price'));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "PUT",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"price\": 0,\n  \"currency\": \"PLN\"\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/products/{{missingId}}/price",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "products", "{{missingId}}", "price"]
+            },
+            "description": "Walidacja przed sprawdzeniem istnienia produktu - 400 także dla nieistniejącego id."
+          }
+        },
+        {
+          "name": "Zmień cenę - nieistniejący produkt (404)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('404 Not Found', () => pm.response.to.have.status(404));",
+                  "pm.test('ProblemDetails', () => pm.expect(pm.response.json().title).to.eql('Product not found'));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "PUT",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"price\": 129.99,\n  \"currency\": \"PLN\"\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/products/{{missingId}}/price",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "products", "{{missingId}}", "price"]
+            }
+          }
+        },
+        {
+          "name": "Pobierz - niepoprawne id (400)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('400 Bad Request', () => pm.response.to.have.status(400));",
+                  "pm.test('Błąd id', () => pm.expect(pm.response.json().errors.id[0]).to.eql('Product id must be a GUID.'));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": { "raw": "{{baseUrl}}/api/products/not-a-guid", "host": ["{{baseUrl}}"], "path": ["api", "products", "not-a-guid"] },
+            "description": "Niepoprawne dane wejściowe - 400, a nie 404."
+          }
+        },
+        {
+          "name": "Pobierz - nieistniejący produkt (404)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('404 Not Found', () => pm.response.to.have.status(404));",
+                  "pm.test('ProblemDetails', () => pm.expect(pm.response.json().title).to.eql('Product not found'));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": { "raw": "{{baseUrl}}/api/products/{{missingId}}", "host": ["{{baseUrl}}"], "path": ["api", "products", "{{missingId}}"] }
+          }
+        }
+      ]
+    },
+    {
+      "name": "3. Idempotencja, współbieżność, health",
+      "description": "Uruchom po kolei (Run folder). Idempotency-Key: ponowione utworzenie nie tworzy duplikatu. If-Match: zmiana ceny tylko dla wersji z ETag (optimistic concurrency).",
+      "item": [
+        {
+          "name": "3.1 Żywotność (live)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200 OK', () => pm.response.to.have.status(200));",
+                  "pm.test('Bez sprawdzania zależności', () => pm.expect(pm.response.json().checks).to.be.empty);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": { "raw": "{{baseUrl}}/health/live", "host": ["{{baseUrl}}"], "path": ["health", "live"] },
+            "description": "Czy proces odpowiada - awaria bazy nie powoduje restartu instancji (livenessProbe)."
+          }
+        },
+        {
+          "name": "3.2 Gotowość (ready)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200 OK', () => pm.response.to.have.status(200));",
+                  "pm.test('Baza, Redis i Kafka sprawdzone', () => pm.expect(pm.response.json().checks).to.have.all.keys('database', 'redis', 'kafka'));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": { "raw": "{{baseUrl}}/health/ready", "host": ["{{baseUrl}}"], "path": ["health", "ready"] },
+            "description": "Czy instancja może obsługiwać ruch: baza wymagana (503), Redis i Kafka opcjonalne (Degraded)."
+          }
+        },
+        {
+          "name": "3.3 Utwórz z Idempotency-Key",
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": ["// nowy klucz na każde uruchomienie folderu", "pm.collectionVariables.set('idempotencyKey', pm.variables.replaceIn('{{$guid}}'));"]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('201 Created', () => pm.response.to.have.status(201));",
+                  "pm.test('Pierwsze żądanie - bez Idempotent-Replayed', () => pm.expect(pm.response.headers.has('Idempotent-Replayed')).to.be.false);",
+                  "pm.collectionVariables.set('idempotentProductId', pm.response.json().id);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Idempotency-Key", "value": "\"{{idempotencyKey}}\"" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Czujnik CO2\",\n  \"price\": 299,\n  \"currency\": \"PLN\"\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "url": { "raw": "{{baseUrl}}/api/products", "host": ["{{baseUrl}}"], "path": ["api", "products"] },
+            "description": "Klucz (np. UUID) nadaje klient; ważny 24 h."
+          }
+        },
+        {
+          "name": "3.4 Ponów z tym samym kluczem",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('201 Created - jak za pierwszym razem', () => pm.response.to.have.status(201));",
+                  "pm.test('Idempotent-Replayed: true', () => pm.expect(pm.response.headers.get('Idempotent-Replayed')).to.eql('true'));",
+                  "pm.test('Ten sam produkt - bez duplikatu', () => pm.expect(pm.response.json().id).to.eql(pm.collectionVariables.get('idempotentProductId')));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Idempotency-Key", "value": "\"{{idempotencyKey}}\"" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Czujnik CO2\",\n  \"price\": 299.00,\n  \"currency\": \"pln\"\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "url": { "raw": "{{baseUrl}}/api/products", "host": ["{{baseUrl}}"], "path": ["api", "products"] },
+            "description": "Np. ponowienie po utracie odpowiedzi. Ta sama treść inaczej zapisana (299.00, pln) to to samo żądanie."
+          }
+        },
+        {
+          "name": "3.5 Ten sam klucz, inna treść (422)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('422 Unprocessable Content', () => pm.response.to.have.status(422));",
+                  "pm.test('ProblemDetails', () => pm.expect(pm.response.json().title).to.eql('Idempotency key reused'));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Idempotency-Key", "value": "\"{{idempotencyKey}}\"" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Czujnik CO2\",\n  \"price\": 199,\n  \"currency\": \"PLN\"\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "url": { "raw": "{{baseUrl}}/api/products", "host": ["{{baseUrl}}"], "path": ["api", "products"] }
+          }
+        },
+        {
+          "name": "3.6 Zmień cenę z If-Match (aktualna wersja)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200 OK', () => pm.response.to.have.status(200));",
+                  "pm.test('Nowa cena', () => pm.expect(pm.response.json().price).to.eql(279));",
+                  "pm.test('ETag - nowa wersja', () => pm.expect(pm.response.headers.get('ETag')).to.eql('\"2\"'));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "PUT",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "If-Match", "value": "\"1\"" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"price\": 279,\n  \"currency\": \"PLN\"\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/products/{{idempotentProductId}}/price",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "products", "{{idempotentProductId}}", "price"]
+            },
+            "description": "If-Match z ETag odczytanym przez GET (nowy produkt ma wersję 1)."
+          }
+        },
+        {
+          "name": "3.7 Zmień cenę z nieaktualnym If-Match (412)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('412 Precondition Failed', () => pm.response.to.have.status(412));",
+                  "pm.test('Aktualna wersja w ETag', () => pm.expect(pm.response.headers.get('ETag')).to.eql('\"2\"'));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "PUT",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "If-Match", "value": "\"1\"" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"price\": 259,\n  \"currency\": \"PLN\"\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/products/{{idempotentProductId}}/price",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "products", "{{idempotentProductId}}", "price"]
+            },
+            "description": "Drugi klient z wersją sprzed zmiany - produkt zmienił się w międzyczasie, nic nie zapisano."
+          }
+        }
+      ]
+    }
+  ]
+}
