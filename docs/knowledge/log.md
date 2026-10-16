@@ -1,6 +1,7 @@
 # Historia zmian
 
 ## 2026-10-16
+* **Aktualizacja**: Compose uruchamia minimum jednego wariantu (profile), bez polityki restartu - [uruchomienie lokalne](playbooks/run-locally.md), [benchmarki](playbooks/run-benchmarks.md), [cztery warianty](decisions/four-variants.md); nowa pułapka [down a profile](pitfalls/compose-down-profiles.md).
 * **Aktualizacja**: zmiana ceny w EF bez automatycznego savepointu - ponowny pomiar w [wynikach](references/benchmark-results.md), zasada w [uczciwym porównaniu](decisions/fair-comparison.md).
 * **Utworzenie**: [wyniki benchmarków](references/benchmark-results.md) - pierwszy pomiar 4 wariantów z przyczynami różnic (automatyczny savepoint EF, opróżnianie dziennika SQL Server).
 * **Utworzenie**: [instrukcja benchmarków](playbooks/run-benchmarks.md) - BenchmarkDotNet na repozytoriach, k6 przez HTTP z nakładką compose i sprzątanie po pomiarach; link w [uczciwym porównaniu](decisions/fair-comparison.md).

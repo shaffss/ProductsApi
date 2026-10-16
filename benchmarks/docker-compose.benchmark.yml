@@ -1,8 +1,9 @@
 # Nakładka na docker-compose.yml do testów HTTP (k6) - mierzy API z bazą, bez cache, Kafki, telemetrii
 # i logów Information (jednakowo we wszystkich wariantach):
-#   docker compose -f docker-compose.yml -f benchmarks/docker-compose.benchmark.yml up -d
-# Outbox jest dalej zapisywany (część zmiany ceny), ale nie wysyłany. Przed powrotem do zwykłej konfiguracji
-# (docker compose up -d) usuń dane z pomiarów: dotnet run -c Release --project benchmarks/Products.Benchmarks -- cleanup
+#   docker compose -f docker-compose.yml -f benchmarks/docker-compose.benchmark.yml --profile efcore-postgres up -d
+# Outbox jest dalej zapisywany (część zmiany ceny), ale nie wysyłany. Po pomiarach, póki działa baza, usuń dane
+# z pomiarów: dotnet run -c Release --project benchmarks/Products.Benchmarks -- cleanup
+# i kontenery: docker compose --profile "*" down
 
 x-benchmark-environment: &benchmark-environment
   Cache__Enabled: "false"

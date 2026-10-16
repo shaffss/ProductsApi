@@ -14,34 +14,38 @@ Wymagania:
 - Docker Desktop z co najmniej 6 GB pamięci (Settings → Resources). Przy 2 GB SQL Server nie mieści się obok reszty kontenerów.
 - .NET 10 SDK, tylko do uruchamiania lokalnego i testów.
 
+Uruchamia się jeden wariant naraz, z minimum kontenerów: jego baza, Redis, Kafka i API. Wariant wybiera profil Compose:
+
 ```bash
-docker compose up -d
+docker compose --profile efcore-postgres up -d
 ```
 
-To polecenie uruchamia SQL Server, PostgreSQL, Redis, Kafkę, Aspire Dashboard i **4 warianty API**:
+| Profil | API | Swagger | Baza |
+|---|---|---|---|
+| `efcore-postgres` | http://localhost:8081 | http://localhost:8081/swagger | PostgreSQL |
+| `efcore-sqlserver` | http://localhost:8082 | http://localhost:8082/swagger | SQL Server |
+| `dapper-postgres` | http://localhost:8083 | http://localhost:8083/swagger | PostgreSQL |
+| `dapper-sqlserver` | http://localhost:8084 | http://localhost:8084/swagger | SQL Server |
 
-| Wariant | Adres | Swagger |
-|---|---|---|
-| EF Core + PostgreSQL | http://localhost:8081 | http://localhost:8081/swagger |
-| EF Core + SQL Server | http://localhost:8082 | http://localhost:8082/swagger |
-| Dapper + PostgreSQL | http://localhost:8083 | http://localhost:8083/swagger |
-| Dapper + SQL Server | http://localhost:8084 | http://localhost:8084/swagger |
-| Aspire Dashboard (ślady, metryki, logi) | http://localhost:18888 | — |
+- **Aspire Dashboard** (ślady, metryki i logi, http://localhost:18888) jest opcjonalny: dodaj `--profile observability`. Bez niego API pomija wysyłkę telemetrii.
+- **Bez profilu** `docker compose up -d` uruchamia samą infrastrukturę domyślnego wariantu (PostgreSQL, Redis, Kafka) pod `dotnet run`, zgodnie z sekwencją z zadania. Domyślny profil jest w pliku `.env`.
+- **Zatrzymanie:** `docker compose --profile "*" down` usuwa wszystkie kontenery projektu, a dane zostają w wolumenach. Samo `docker compose down` pomija kontenery z profili, których polecenie nie wskazuje. Kontenery nie mają polityki restartu, więc po restarcie Dockera nic nie wstaje samo.
 
-> **Migracje stosowane automatycznie.** Kontenery API mają włączone `Database__MigrateOnStartup=true`. Przy starcie każdy z nich stosuje migracje EF Core do swojej bazy, więc `dotnet ef database update` nie jest potrzebne. Kontenery API startują dopiero, gdy bazy już istnieją: bazę PostgreSQL zakłada kontener `postgres` (`POSTGRES_DB`), a bazę SQL Server jednorazowy kontener `sqlserver-init` (skrypt `db/sqlserver/Create/000_database.sql`). Dwa warianty na jednej bazie mogą więc startować jednocześnie - EF Core blokuje bazę na czas migracji.
+> **Migracje stosowane automatycznie.** Kontenery API mają włączone `Database__MigrateOnStartup=true`, więc przy starcie stosują migracje EF Core do swojej bazy i `dotnet ef database update` nie jest potrzebne. API startuje dopiero, gdy baza już istnieje. Bazę PostgreSQL zakłada kontener `postgres` (`POSTGRES_DB`), a bazę SQL Server jednorazowy kontener `sqlserver-init` (skrypt `db/sqlserver/Create/000_database.sql`). Kilka wariantów na jednej bazie (kilka `--profile`) może więc startować jednocześnie, bo EF Core blokuje bazę na czas migracji.
 
 Działający wariant pokazuje `GET /health` w polu `variant`. Kolekcja Postmana jest opisana w sekcji [Weryfikacja](#weryfikacja).
 
 ## Uruchomienie lokalne (dotnet run / Visual Studio)
 
 ```bash
-docker compose up -d sqlserver postgres redis kafka aspire-dashboard
+docker compose up -d
 dotnet tool restore
 dotnet ef database update --project src/Products.Migrations.Postgres
 dotnet run --project src/Products.Api
 ```
 
-- **Sekwencja z zadania** (`docker compose up -d`, `dotnet ef database update`, `dotnet run --project src/Products.Api`) działa z jedną różnicą: `dotnet ef` wymaga `--project`, bo migracje są osobne dla każdej bazy. Bez parametru kończy się błędem „No project was found”. Po pełnym `docker compose up -d` ten krok jest zbędny, bo migracje wykonały już kontenery API.
+- **Sekwencja z zadania** (`docker compose up -d`, `dotnet ef database update`, `dotnet run --project src/Products.Api`) działa z jedną różnicą: `dotnet ef` wymaga `--project`, bo migracje są osobne dla każdej bazy. Bez parametru kończy się błędem „No project was found”.
+- **Infrastruktura:** `docker compose up -d` uruchamia PostgreSQL, Redis i Kafkę. Dla wariantów SQL Server użyj `docker compose --profile sqlserver up -d`. Z telemetrią dodaj `--profile observability`, np. `docker compose --profile postgres --profile observability up -d`.
 - **Migracje:** `dotnet ef database update` tworzy bazę (`products` w PostgreSQL, `Products` w SQL Server) i schemat. Dla wariantów SQL Server: `dotnet ef database update --project src/Products.Migrations.SqlServer`. Connection string do kontenera z compose jest domyślny; inną bazę wskazuje zmienna `ConnectionStrings__Postgres` / `ConnectionStrings__SqlServer`.
 - **Domyślny wariant** `dotnet run` (bez profilu) to EF Core + PostgreSQL.
 - **Profile uruchomieniowe** (`launchSettings.json`): `EfCore-Postgres`, `EfCore-SqlServer`, `Dapper-Postgres`, `Dapper-SqlServer`. Wszystkie działają na http://localhost:5032. W Visual Studio wybierasz profil z listy przy przycisku Start (projekt startowy: `Products.Api`), a VS otwiera Swaggera.
@@ -50,7 +54,7 @@ dotnet run --project src/Products.Api
   ```bash
   dotnet run --project src/Products.Api -- --Persistence:Orm=Dapper --Persistence:Database=SqlServer
   ```
-- **Telemetria:** w Development API wysyła ślady, metryki i logi do Aspire Dashboard z compose (`localhost:4317`, podgląd http://localhost:18888).
+- **Telemetria:** w Development API wysyła ślady, metryki i logi do Aspire Dashboard z compose (profil `observability`, `localhost:4317`, podgląd http://localhost:18888); bez dashboardu telemetria jest pomijana.
 
 ### Konfiguracja
 
@@ -120,15 +124,15 @@ If-Match: "1"
 
 | Krok | Jak sprawdzić |
 |---|---|
-| 9. Redis, Kafka i bazy | `docker compose up -d` (od razu z 4 wariantami API) |
-| 10. Migracja inicjalna | wykonują ją kontenery API przy starcie (`docker logs api-efcore-postgres` → `Database migrated`); lokalnie `dotnet ef database update --project src/Products.Migrations.Postgres` |
-| 11. API | kontenery na portach 8081–8084 albo lokalnie `dotnet run --project src/Products.Api` (port 5032); `GET /health` → `Healthy`, `variant`, stan bazy, Redisa i Kafki |
+| 9. Redis, Kafka i baza | `docker compose up -d` (PostgreSQL, Redis, Kafka); od razu z API w kontenerze: `docker compose --profile efcore-postgres up -d` |
+| 10. Migracja inicjalna | `dotnet ef database update --project src/Products.Migrations.Postgres`; API w kontenerze wykonuje ją samo przy starcie (`docker logs api-efcore-postgres` → `Database migrated`) |
+| 11. API | `dotnet run --project src/Products.Api` (port 5032) albo kontener wariantu (porty 8081–8084); `GET /health` → `Healthy`, `variant`, stan bazy, Redisa i Kafki |
 | 12. Utworzenie produktu | Postman 1.2: `201`, `Location` |
 | 13. Pierwszy odczyt: z bazy, zapis do Redisa | Postman 1.3: `X-Cache: MISS`; `docker exec redis redis-cli GET product:<id>` i `TTL product:<id>` (~300 s) |
 | 14. Drugi odczyt: z cache | Postman 1.4: `X-Cache: HIT` |
 | 15–16. Zmiana ceny i unieważnienie cache | Postman 1.5; `docker exec redis redis-cli EXISTS product:<id>` → `0` |
 | 17. Nowa cena | Postman 1.6: `X-Cache: MISS`, nowa cena |
-| 18. Zdarzenie w logu konsumenta | `docker logs api-efcore-postgres` (PowerShell: `\| Select-String "Product price changed"`) |
+| 18. Zdarzenie w logu konsumenta | konsola `dotnet run` albo `docker logs api-efcore-postgres` (PowerShell: `\| Select-String "Product price changed"`) |
 
 Wpis w logu:
 ```
@@ -136,12 +140,12 @@ Product price changed: productId=..., oldPrice=149.99, newPrice=129.99, currency
 ```
 Przy zmianie waluty dochodzi `oldCurrency=...`.
 
-Każdy wariant ma własną grupę konsumentów, więc loguje zdarzenia wszystkich wariantów, także tych z drugiej bazy. Zawartość topicu z nagłówkami (`event-type`, `traceparent`):
+Gdy działa kilka wariantów naraz, każdy ma własną grupę konsumentów, więc loguje zdarzenia wszystkich wariantów, także tych z drugiej bazy. Zawartość topicu z nagłówkami (`event-type`, `traceparent`):
 ```bash
 docker exec rekrutacja-kafka /opt/kafka/bin/kafka-console-consumer.sh --bootstrap-server kafka:9092 --topic product-price-changed --from-beginning --property print.key=true --property print.headers=true
 ```
 
-**Ślad zmiany ceny** w Aspire Dashboard (http://localhost:18888 → Traces): żądanie `PUT` z zapytaniami do bazy, wysyłka z outboxa (`product-price-changed publish`) i obsługa przez konsumentów każdego wariantu (`product-price-changed process`) w jednym śladzie. Metryki aplikacji (`products.*`): trafienia cache, wysłane i nieudane wiadomości outboxa, opóźnienie outbox → Kafka, odebrane zdarzenia.
+**Ślad zmiany ceny** w Aspire Dashboard (`--profile observability`, http://localhost:18888 → Traces): żądanie `PUT` z zapytaniami do bazy, wysyłka z outboxa (`product-price-changed publish`) i obsługa przez konsumentów każdego wariantu (`product-price-changed process`) w jednym śladzie. Metryki aplikacji (`products.*`): trafienia cache, wysłane i nieudane wiadomości outboxa, opóźnienie outbox → Kafka, odebrane zdarzenia.
 
 ## Testy
 
@@ -170,18 +174,18 @@ Uruchamia 95 testów kodu i sprawdzenie [bazy wiedzy](#baza-wiedzy) (po jednym p
 
 Porównanie 4 wariantów na 100 tys. produktów z `db/*/Publish/benchmark.sql` ([wgranie danych](docs/knowledge/playbooks/load-data.md)), na dwóch poziomach:
 
-- **Repozytoria** (BenchmarkDotNet, `benchmarks/Products.Benchmarks`): `GetById`, `Create` i `ChangePrice` w każdym wariancie, bez HTTP, cache i Kafki, z alokacjami. Na czas pomiaru zatrzymaj kontenery API, żeby ich wysyłka outboxa i konsumenci nie obciążały baz.
+- **Repozytoria** (BenchmarkDotNet, `benchmarks/Products.Benchmarks`): `GetById`, `Create` i `ChangePrice` w każdym wariancie, z alokacjami. Bez HTTP, cache i Kafki, więc wystarczą same bazy, bez kontenerów API.
   ```bash
-  docker compose stop api-efcore-postgres api-efcore-sqlserver api-dapper-postgres api-dapper-sqlserver
+  docker compose --profile postgres --profile sqlserver up -d
   dotnet run -c Release --project benchmarks/Products.Benchmarks
   ```
 - **HTTP** (k6 w kontenerze, w sieci compose): przepustowość i opóźnienia API z bazą, jeden wariant naraz. Nakładka `benchmarks/docker-compose.benchmark.yml` wyłącza cache, Kafkę, telemetrię i logi `Information`.
   ```bash
-  docker compose -f docker-compose.yml -f benchmarks/docker-compose.benchmark.yml up -d
+  docker compose -f docker-compose.yml -f benchmarks/docker-compose.benchmark.yml --profile efcore-postgres up -d
   docker run --rm -i --network rekrutacja_default -e BASE_URL=http://api-efcore-postgres:8080 -e SCENARIO=read grafana/k6:2.3.0 run - < benchmarks/k6/products.js
   ```
 
-Po pomiarach `dotnet run -c Release --project benchmarks/Products.Benchmarks -- cleanup` usuwa utworzone produkty i niewysłane zdarzenia (benchmark repozytoriów robi to sam), a `docker compose up -d` przywraca zwykłą konfigurację. Szczegóły: [instrukcja](docs/knowledge/playbooks/run-benchmarks.md).
+Po pomiarach `dotnet run -c Release --project benchmarks/Products.Benchmarks -- cleanup` usuwa utworzone produkty i niewysłane zdarzenia (benchmark repozytoriów robi to sam), a `docker compose --profile "*" down` usuwa kontenery. Szczegóły: [instrukcja](docs/knowledge/playbooks/run-benchmarks.md).
 
 **Wyniki** pierwszego pomiaru ([pełne tabele i przyczyny](docs/knowledge/references/benchmark-results.md)):
 - **Odczyt i utworzenie:** EF Core i Dapper różnią się o kilka procent, a EF alokuje 2-5 razy więcej pamięci.

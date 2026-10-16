@@ -16,7 +16,7 @@ dotnet format Products.slnx --verify-no-changes      # styl i analizatory, jak w
 # Testy integracyjne
 
 - Stawiają własne kontenery (SQL Server, PostgreSQL, Redis, Kafka) raz na przebieg (`AssemblyFixture`), w tych samych przypiętych wersjach co compose.
-- **Pamięć Dockera:** testowy SQL Server działa obok tego z compose. Przy 6 GB warto na czas testów zatrzymać kontenery API: `docker compose stop api-efcore-postgres api-efcore-sqlserver api-dapper-postgres api-dapper-sqlserver`.
+- **Pamięć Dockera:** testowy SQL Server działa obok kontenerów z compose. Przy 6 GB warto je na czas testów usunąć: `docker compose --profile "*" down`.
 - **Klasy testów idą po kolei** (`Parallelization(Mode = ParallelMode.None)`), bo równolegle przy małej pamięci SQL Server łapał timeouty. Równoległość wewnątrz testów, np. współbieżne zmiany cen, zostaje.
 - **Każdy test end-to-end** ma własną bazę i grupę konsumentów Kafki. Wspólna grupa i twardo zabity proces blokowały partycje na czas `session.timeout` (45 s).
 

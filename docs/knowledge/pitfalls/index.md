@@ -14,6 +14,7 @@
 * [Równoległe tworzenie bazy przy pierwszym starcie](concurrent-database-creation.md) - Dwie instancje API z migracjami przy starcie na pustym serwerze tworzą bazę naraz - jedna pada z błędem 1801, bo blokada migracji EF działa dopiero w istniejącej bazie.
 * [Npgsql i Kerberos w obrazie chiseled](chiseled-gssapi.md) - W obrazie chiseled nie ma libgssapi_krb5, więc Npgsql przy próbie szyfrowania GSS wypisuje błąd do logu - wyłącza się to w connection stringu.
 * [Kafka zapisuje dane poza wolumenem](kafka-log-dirs.md) - Obraz apache/kafka bez KAFKA_LOG_DIRS zapisuje dane w /tmp/kafka-logs w kontenerze - wolumen zostaje pusty, a topic i offsety giną przy odtworzeniu kontenera.
+* [docker compose down pomija profile](compose-down-profiles.md) - Samo docker compose down nie usuwa kontenerów z profili, których polecenie nie wskazuje - zostają razem z siecią. Sprzątanie: docker compose --profile "*" down.
 
 # Działanie w tle
 

@@ -16,7 +16,7 @@ generated: { by: claude-code/claude-opus-5-5, at: 2026-10-15T21:30:00Z }
 - **Różnice między bazami** są w jednym miejscu: `SqlDialect` (`SqlDialect.SqlServer.cs`, `SqlDialect.Postgres.cs`) - SQL, typy parametrów i konfiguracja modelu EF.
 - **Projekty:** `Products.Persistence` (wspólne: dialekt, outbox, inbox, retencja), `Products.Persistence.EfCore`, `Products.Persistence.Dapper`.
 - **Schemat** jest jeden dla obu ORM, z migracji EF ([decyzja](migrations-source-of-truth.md)); migracje per baza są w osobnych projektach.
-- **Compose** uruchamia 4 kontenery API (porty 8081-8084). Dwa warianty na jednej bazie współdzielą outbox, ale wysyła jeden naraz.
+- **Compose** ma profil na każdy wariant (porty 8081-8084) i uruchamia tylko jego minimum: bazę, Redisa, Kafkę i API. Gdy działa kilka wariantów na jednej bazie, współdzielą outbox, ale wysyła jeden naraz.
 - **`/health`** pokazuje działający wariant w polu `variant`.
 - **Lokalnie:** profile w `launchSettings.json` albo okno wyboru (profil `Launcher`) - [Uruchomienie lokalne](../playbooks/run-locally.md).
 

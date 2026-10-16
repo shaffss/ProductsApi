@@ -41,7 +41,7 @@ generated: { by: claude-code/claude-opus-5-5, at: 2026-10-15T21:30:00Z }
    ```
 
    Zrzut obejmuje kolumny z typami i wartościami domyślnymi, klucze, klucze obce, CHECK, indeksy (z filtrami) i dane `Currencies`. Nazwy domyślnych constraintów SQL Server są pomijane, bo EF nadaje własne. Zapytania: [schema-dump-sqlserver.sql](../references/schema-dump-sqlserver.sql), [schema-dump-postgres.sql](../references/schema-dump-postgres.sql).
-5. **Bazy deweloperskie:** kontenery API stosują migracje przy starcie (`docker compose up -d --build`); lokalnie `dotnet ef database update --project ...`.
+5. **Bazy deweloperskie:** kontener API stosuje migracje przy starcie (`docker compose --profile <wariant> up -d --build`); lokalnie `dotnet ef database update --project ...`.
 6. **Testy:** przy zmianie SQL w `SqlDialect` testy integracyjne obejmują wszystkie warianty (`ProductRepositoryTests`, `MessagingStoreTests`, `ApiEndToEndTests`).
 
 Powiązane: [Migracje EF jako źródło prawdy schematu](../decisions/migrations-source-of-truth.md), [Schemat bazy](../contracts/database-schema.md)

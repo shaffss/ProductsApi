@@ -3,10 +3,16 @@ name: rekrutacja
 # Hasła wyłącznie dla lokalnych kontenerów deweloperskich (nie produkcyjne) - jawne, żeby całość
 # działała bez ręcznej konfiguracji. Te same wartości są w appsettings.Development.json API.
 #
-# docker compose up -d   -> infrastruktura + 4 warianty API (ORM x baza):
-#   http://localhost:8081  EfCore + Postgres     http://localhost:8083  Dapper + Postgres
-#   http://localhost:8082  EfCore + SqlServer    http://localhost:8084  Dapper + SqlServer
-#   http://localhost:18888 Aspire Dashboard - ślady, metryki i logi wszystkich wariantów (OpenTelemetry)
+# Uruchamiane jest tylko minimum dla wybranego wariantu (profil): jego baza, Redis, Kafka i API.
+#   docker compose up -d                              PostgreSQL, Redis, Kafka - pod dotnet run (profil z .env)
+#   docker compose --profile sqlserver up -d          SQL Server, Redis, Kafka - pod dotnet run
+#   docker compose --profile efcore-postgres up -d    + API w kontenerze:
+#     efcore-postgres  http://localhost:8081      dapper-postgres  http://localhost:8083
+#     efcore-sqlserver http://localhost:8082      dapper-sqlserver http://localhost:8084
+#   --profile observability                         dodatkowo Aspire Dashboard (http://localhost:18888)
+#   docker compose --profile "*" down               zatrzymuje i usuwa wszystkie kontenery (dane zostają w wolumenach;
+#                                                   samo "down" pomija kontenery z profili, które nie są aktywne)
+# Bez polityki restartu: po restarcie Dockera nic nie wstaje samo, działa tylko to, co uruchomisz.
 # Kontenery API same stosują migracje EF przy starcie (Database__MigrateOnStartup). Bazy zakładane są wcześniej
 # (postgres: POSTGRES_DB, SQL Server: jednorazowy sqlserver-init) - dwa warianty na jednej bazie nie tworzą jej
 # naraz, a migracje EF wykonuje jeden z nich pod blokadą w bazie.
@@ -17,14 +23,23 @@ x-api: &api
     context: .
     dockerfile: src/Products.Api/Dockerfile
   image: rekrutacja-products-api
-  depends_on:
-    sqlserver-init: { condition: service_completed_successfully } # migracje przy starcie wymagają gotowej bazy
-    postgres: { condition: service_healthy }
-    redis: { condition: service_started } # bez Redisa i Kafki API działa (Degraded) i łączy się w tle
-    kafka: { condition: service_started }
-  restart: unless-stopped
   # SIGTERM -> łagodne zamknięcie (offsety Kafki, wysyłka w toku); dłużej niż ShutdownTimeout .NET (30 s)
   stop_grace_period: 40s
+
+# migracje przy starcie wymagają gotowej bazy; bez Redisa i Kafki API działa (Degraded) i łączy się w tle
+x-api-postgres: &api-postgres
+  <<: *api
+  depends_on:
+    postgres: { condition: service_healthy }
+    redis: { condition: service_started }
+    kafka: { condition: service_started }
+
+x-api-sqlserver: &api-sqlserver
+  <<: *api
+  depends_on:
+    sqlserver-init: { condition: service_completed_successfully }
+    redis: { condition: service_started }
+    kafka: { condition: service_started }
 
 x-api-environment: &api-environment
   ASPNETCORE_ENVIRONMENT: Development # Swagger pod /swagger
@@ -41,11 +56,12 @@ services:
   sqlserver:
     image: mcr.microsoft.com/mssql/server:2025-CU9-GDR1-ubuntu-24.04
     container_name: sqlserver
+    profiles: [sqlserver, efcore-sqlserver, dapper-sqlserver]
     environment:
       ACCEPT_EULA: "Y"
       MSSQL_PID: Developer
       MSSQL_SA_PASSWORD: LocalDev_Passw0rd
-      MSSQL_MEMORY_LIMIT_MB: 2048 # domyślnie do 80% pamięci Dockera - zostawia miejsce dla Postgresa (benchmarki)
+      MSSQL_MEMORY_LIMIT_MB: 2048 # domyślnie do 80% pamięci Dockera - miejsce dla Postgresa w benchmarku repozytoriów
     ports:
       - "1433:1433"
     volumes:
@@ -55,23 +71,23 @@ services:
       interval: 5s
       timeout: 5s
       retries: 30
-    restart: unless-stopped
     stop_grace_period: 30s # checkpoint przy zamknięciu - bez odtwarzania dziennika przy kolejnym starcie
 
   # Jednorazowo: baza Products z READ_COMMITTED_SNAPSHOT, zanim wystartują API (skrypt idempotentny)
   sqlserver-init:
     image: mcr.microsoft.com/mssql/server:2025-CU9-GDR1-ubuntu-24.04
     container_name: sqlserver-init
+    profiles: [sqlserver, efcore-sqlserver, dapper-sqlserver]
     depends_on:
       sqlserver: { condition: service_healthy }
     volumes:
       - ./db/sqlserver/Create/000_database.sql:/init/000_database.sql:ro
     entrypoint: ["/opt/mssql-tools18/bin/sqlcmd", "-S", "sqlserver", "-U", "sa", "-P", "LocalDev_Passw0rd", "-C", "-b", "-i", "/init/000_database.sql"]
-    restart: "no"
 
   postgres:
     image: postgres:18.6
     container_name: postgres
+    profiles: [postgres, efcore-postgres, dapper-postgres]
     environment:
       POSTGRES_USER: postgres
       POSTGRES_PASSWORD: LocalDev_Passw0rd
@@ -86,7 +102,6 @@ services:
       interval: 5s
       timeout: 5s
       retries: 30
-    restart: unless-stopped
     stop_grace_period: 30s # checkpoint przy zamknięciu
 
   kafka:
@@ -111,7 +126,6 @@ services:
       - "9094:9094" # z hosta (dotnet run): localhost:9094; z kontenerów: kafka:9092
     volumes:
       - kafka-data:/var/lib/kafka/data
-    restart: unless-stopped
     stop_grace_period: 30s # kontrolowane zamknięcie brokera (zapis logów i indeksów)
 
   redis:
@@ -123,26 +137,27 @@ services:
     command: ["redis-server", "--save", "", "--appendonly", "no", "--maxmemory", "256mb", "--maxmemory-policy", "allkeys-lru"]
     ports:
       - "6379:6379"
-    restart: unless-stopped
 
   # Podgląd OpenTelemetry (ślady od żądania HTTP przez outbox i Kafkę do konsumenta, metryki, logi).
+  # Opcjonalny (profil observability) - bez niego API nie ma dokąd wysłać telemetrii i ją pomija.
   # Bez logowania - tylko lokalnie.
   aspire-dashboard:
     image: mcr.microsoft.com/dotnet/aspire-dashboard:13.6.1
     container_name: aspire-dashboard
+    profiles: [observability]
     environment:
       ASPIRE_DASHBOARD_UNSECURED_ALLOW_ANONYMOUS: "true"
     ports:
       - "18888:18888" # UI
       - "4317:18889" # OTLP (gRPC) z hosta, np. dotnet run; z kontenerów: aspire-dashboard:18889
-    restart: unless-stopped
 
-  # Każdy wariant ma własną grupę konsumentów Kafki: loguje wszystkie zdarzenia (także z drugiej bazy),
-  # więc zmianę ceny widać w logu wariantu, przez który ją wykonano.
-  # Dwa warianty na jednej bazie współdzielą outbox - wysyła jeden naraz (blokada w bazie).
+  # Warianty API - każdy we własnym profilu. Uruchomione razem (kilka --profile) też działają poprawnie:
+  # każdy ma własną grupę konsumentów Kafki (loguje wszystkie zdarzenia, także z drugiej bazy), a dwa warianty
+  # na jednej bazie współdzielą outbox - wysyła jeden naraz (blokada w bazie).
   api-efcore-postgres:
-    <<: *api
+    <<: *api-postgres
     container_name: api-efcore-postgres
+    profiles: [efcore-postgres]
     ports: ["8081:8080"]
     environment:
       <<: *api-environment
@@ -152,8 +167,9 @@ services:
       OTEL_SERVICE_NAME: api-efcore-postgres
 
   api-efcore-sqlserver:
-    <<: *api
+    <<: *api-sqlserver
     container_name: api-efcore-sqlserver
+    profiles: [efcore-sqlserver]
     ports: ["8082:8080"]
     environment:
       <<: *api-environment
@@ -163,8 +179,9 @@ services:
       OTEL_SERVICE_NAME: api-efcore-sqlserver
 
   api-dapper-postgres:
-    <<: *api
+    <<: *api-postgres
     container_name: api-dapper-postgres
+    profiles: [dapper-postgres]
     ports: ["8083:8080"]
     environment:
       <<: *api-environment
@@ -174,8 +191,9 @@ services:
       OTEL_SERVICE_NAME: api-dapper-postgres
 
   api-dapper-sqlserver:
-    <<: *api
+    <<: *api-sqlserver
     container_name: api-dapper-sqlserver
+    profiles: [dapper-sqlserver]
     ports: ["8084:8080"]
     environment:
       <<: *api-environment
