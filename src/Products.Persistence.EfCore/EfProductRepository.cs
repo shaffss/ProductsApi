@@ -55,6 +55,9 @@ internal sealed class EfProductRepository(IDbContextFactory<ProductsDbContext> f
     public async Task<PriceUpdate?> ChangePriceAsync(Guid id, decimal price, string currency, int? expectedVersion, CancellationToken ct)
     {
         await using var db = await factory.CreateDbContextAsync(ct);
+        // SaveChanges w jawnej transakcji domyślnie zakłada savepoint (PostgreSQL: SAVEPOINT + RELEASE, SQL Server:
+        // SAVE TRANSACTION) - dodatkowe wymiany z bazą, zbędne, bo każdy błąd wycofuje całą transakcję
+        db.Database.AutoSavepointsEnabled = false;
 
         // jawna transakcja w strategii ponawiania (EnableRetryOnFailure) - przy błędzie przejściowym powtarzana w całości
         return await db.Database.CreateExecutionStrategy().ExecuteAsync(async ct =>

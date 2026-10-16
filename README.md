@@ -213,7 +213,7 @@ postman/                          kolekcja i środowiska Postmana
 - **Uczciwe porównanie wariantów:**
   - te same sterowniki baz w Dapperze i EF;
   - typy parametrów dopasowane do kolumn: stała precyzja `decimal(18,2)` (inaczej SQL Server tworzyłby osobny plan dla każdej liczby cyfr w kwocie) i `datetime2` zamiast `datetime`;
-  - EF korzysta z puli kontekstów i zapytania kompilowanego raz;
+  - EF korzysta z puli kontekstów i zapytania kompilowanego raz, a w transakcji zmiany ceny nie zakłada automatycznego savepointu (zbędne wymiany z bazą);
   - JSON jest generowany przy kompilacji, logi przez `[LoggerMessage]` (bez alokacji, gdy poziom jest wyłączony);
   - ta sama polityka ponawiania przy błędach przejściowych bazy (zerwane połączenie, deadlock): EF Core `EnableRetryOnFailure`, Dapper `DbRetry`, po 3 ponowienia;
   - SQL Server z `READ_COMMITTED_SNAPSHOT` (odczyty nie czekają na blokady zapisów), czyli ta sama semantyka co MVCC w PostgreSQL. EF Core włącza tę opcję sam, gdy tworzy bazę; skrypt `db/sqlserver/Create/000_database.sql` też. Dla bazy utworzonej inaczej: `ALTER DATABASE Products SET READ_COMMITTED_SNAPSHOT ON`.
