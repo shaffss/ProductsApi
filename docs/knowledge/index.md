@@ -22,7 +22,7 @@ Dla recenzenta zadania punktem wejścia jest [README](../../README.md).
 * [Kontrakty](contracts/) - API HTTP, zdarzenie w Kafce i schemat bazy.
 * [Instrukcje](playbooks/) - uruchamianie, testy, zmiana schematu, dead-letter, dane.
 * [Pułapki](pitfalls/) - problemy napotkane w projekcie i ich rozwiązania.
-* [Materiały pomocnicze](references/) - zapytania do porównania schematów baz.
+* [Materiały pomocnicze](references/) - zapytania do porównania schematów baz i wyniki benchmarków.
 * [Historia zmian](log.md) - zmiany w tej bazie wiedzy.
 
 # Konwencje

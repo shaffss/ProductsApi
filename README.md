@@ -166,6 +166,28 @@ Uruchamia 95 testów kodu i sprawdzenie [bazy wiedzy](#baza-wiedzy) (po jednym p
 
 **CI** (`.github/workflows/ci.yml`, GitHub Actions): format i analizatory (`dotnet format --verify-no-changes`), build Release, testy jednostkowe i integracyjne (Docker na runnerze), obraz Dockera.
 
+## Benchmarki
+
+Porównanie 4 wariantów na 100 tys. produktów z `db/*/Publish/benchmark.sql` ([wgranie danych](docs/knowledge/playbooks/load-data.md)), na dwóch poziomach:
+
+- **Repozytoria** (BenchmarkDotNet, `benchmarks/Products.Benchmarks`): `GetById`, `Create` i `ChangePrice` w każdym wariancie, bez HTTP, cache i Kafki, z alokacjami. Na czas pomiaru zatrzymaj kontenery API, żeby ich wysyłka outboxa i konsumenci nie obciążały baz.
+  ```bash
+  docker compose stop api-efcore-postgres api-efcore-sqlserver api-dapper-postgres api-dapper-sqlserver
+  dotnet run -c Release --project benchmarks/Products.Benchmarks
+  ```
+- **HTTP** (k6 w kontenerze, w sieci compose): przepustowość i opóźnienia API z bazą, jeden wariant naraz. Nakładka `benchmarks/docker-compose.benchmark.yml` wyłącza cache, Kafkę, telemetrię i logi `Information`.
+  ```bash
+  docker compose -f docker-compose.yml -f benchmarks/docker-compose.benchmark.yml up -d
+  docker run --rm -i --network rekrutacja_default -e BASE_URL=http://api-efcore-postgres:8080 -e SCENARIO=read grafana/k6:2.3.0 run - < benchmarks/k6/products.js
+  ```
+
+Po pomiarach `dotnet run -c Release --project benchmarks/Products.Benchmarks -- cleanup` usuwa utworzone produkty i niewysłane zdarzenia (benchmark repozytoriów robi to sam), a `docker compose up -d` przywraca zwykłą konfigurację. Szczegóły: [instrukcja](docs/knowledge/playbooks/run-benchmarks.md).
+
+**Wyniki** pierwszego pomiaru ([pełne tabele i przyczyny](docs/knowledge/references/benchmark-results.md)):
+- **Odczyt i utworzenie:** EF Core i Dapper różnią się o kilka procent, a EF alokuje 2-5 razy więcej pamięci.
+- **Zmiana ceny:** Dapper był szybszy o ok. 2 ms na operację, bo `SaveChanges` w jawnej transakcji zakładał automatyczny savepoint. Po jego wyłączeniu EF zrównał się z Dapperem w pojedynczej operacji. Pod pełnym obciążeniem HTTP na PostgreSQL Dapper wciąż obsługuje ok. 14% więcej żądań, bo EF zużywa więcej procesora.
+- **PostgreSQL a SQL Server:** w Docker Desktop PostgreSQL jest szybszy od SQL Server, bo zapisy SQL Server ogranicza opróżnianie dziennika na dysk VM.
+
 ## Architektura
 
 ```
@@ -181,6 +203,7 @@ src/
   Products.Migrations.SqlServer   migracje EF dla SQL Server
   Products.Migrations.Postgres    migracje EF dla PostgreSQL
 tests/                            testy jednostkowe i integracyjne
+benchmarks/                       BenchmarkDotNet (repozytoria), k6 (HTTP), nakładka compose do pomiarów
 db/                               skrypty SQL (schemat, dane demo, dane do benchmarków)
 docs/knowledge/                   baza wiedzy w formacie OKF (przepływy, mechanizmy, decyzje, instrukcje)
 postman/                          kolekcja i środowiska Postmana

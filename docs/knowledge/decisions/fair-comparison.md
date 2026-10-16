@@ -18,6 +18,7 @@ generated: { by: claude-code/claude-opus-5-5, at: 2026-10-15T21:30:00Z }
 - **EF bez zbędnego narzutu:**
   - pula kontekstów i zapytanie kompilowane raz (pole instancji, bo model jest per provider);
   - bez automatycznych indeksów na kluczach obcych;
+  - bez automatycznego savepointu przy `SaveChanges` w jawnej transakcji zmiany ceny. Dokładał 1-2 wymiany z bazą (ok. 2 ms) - [pomiar](../references/benchmark-results.md);
   - logi zapytań EF na `Warning` (na `Information` koszt byłby tylko w wariantach EF).
 - **Wspólne i poza porównaniem:** outbox, inbox i retencja działają przez ADO.NET - praca w tle, ta sama dla obu ORM.
 - **Ta sama semantyka baz:** `READ_COMMITTED_SNAPSHOT` w SQL Server, jak MVCC w PostgreSQL ([decyzja](rcsi-not-readpast.md)).
@@ -29,6 +30,6 @@ generated: { by: claude-code/claude-opus-5-5, at: 2026-10-15T21:30:00Z }
 
 # Ustawienia do pomiarów
 
-`Cache:Enabled=false`, `Kafka:Enabled=false`, pusty `OTEL_EXPORTER_OTLP_ENDPOINT`; dane z `db/*/Benchmark` - [Dane demo i do benchmarków](../playbooks/load-data.md).
+`Cache:Enabled=false`, `Kafka:Enabled=false`, pusty `OTEL_EXPORTER_OTLP_ENDPOINT` (nakładka `benchmarks/docker-compose.benchmark.yml`); dane z `db/*/Benchmark` - [Dane demo i do benchmarków](../playbooks/load-data.md). Uruchamianie pomiarów: [Benchmarki wariantów](../playbooks/run-benchmarks.md).
 
 Powiązane: [Cztery warianty](four-variants.md)

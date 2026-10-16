@@ -3,6 +3,9 @@
     <OutputType>Exe</OutputType>
   </PropertyGroup>
   <ItemGroup>
+    <PackageReference Include="BenchmarkDotNet" />
+  </ItemGroup>
+  <ItemGroup>
     <ProjectReference Include="..\..\src\Products.Persistence.Dapper\Products.Persistence.Dapper.csproj" />
     <ProjectReference Include="..\..\src\Products.Persistence.EfCore\Products.Persistence.EfCore.csproj" />
   </ItemGroup>

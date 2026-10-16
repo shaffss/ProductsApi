@@ -7,8 +7,9 @@ obj/
 .idea/
 *.user
 
-# Wyniki testów
+# Wyniki testów i benchmarków
 TestResults/
+BenchmarkDotNet.Artifacts/
 
 # Notatki robocze - tylko lokalnie
 NOTATKI.md
