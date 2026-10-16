@@ -7,4 +7,9 @@
   <ItemGroup>
     <ProjectReference Include="..\Products.Core\Products.Core.csproj" />
   </ItemGroup>
+  <!-- skrypty schematu dla Database:Schema=Scripts (SchemaScripts); 000_database.sql wymaga sqlcmd/psql -->
+  <ItemGroup>
+    <EmbeddedResource Include="..\..\db\sqlserver\Create\*.sql" Exclude="..\..\db\sqlserver\Create\000_*.sql" LogicalName="db/sqlserver/%(Filename)%(Extension)" />
+    <EmbeddedResource Include="..\..\db\postgres\Create\*.sql" Exclude="..\..\db\postgres\Create\000_*.sql" LogicalName="db/postgres/%(Filename)%(Extension)" />
+  </ItemGroup>
 </Project>

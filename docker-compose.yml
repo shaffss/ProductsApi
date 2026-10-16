@@ -13,9 +13,10 @@ name: rekrutacja
 #   docker compose --profile "*" down               zatrzymuje i usuwa wszystkie kontenery (dane zostają w wolumenach;
 #                                                   samo "down" pomija kontenery z profili, które nie są aktywne)
 # Bez polityki restartu: po restarcie Dockera nic nie wstaje samo, działa tylko to, co uruchomisz.
-# Kontenery API same stosują migracje EF przy starcie (Database__MigrateOnStartup). Bazy zakładane są wcześniej
-# (postgres: POSTGRES_DB, SQL Server: jednorazowy sqlserver-init) - dwa warianty na jednej bazie nie tworzą jej
-# naraz, a migracje EF wykonuje jeden z nich pod blokadą w bazie.
+# Kontenery API same zakładają schemat przy starcie (Database__Schema): warianty EF z migracji EF, warianty Dappera
+# ze skryptów db/<baza>/Create - wynik jest ten sam, więc warianty mogą na zmianę używać jednej bazy.
+# Bazy zakładane są wcześniej (postgres: POSTGRES_DB, SQL Server: jednorazowy sqlserver-init) - dwa warianty
+# na jednej bazie nie tworzą jej naraz, a schemat zakłada jeden z nich pod blokadą w bazie.
 # Wersje obrazów przypięte - to samo środowisko przy każdym uruchomieniu.
 
 x-api: &api
@@ -26,7 +27,7 @@ x-api: &api
   # SIGTERM -> łagodne zamknięcie (offsety Kafki, wysyłka w toku); dłużej niż ShutdownTimeout .NET (30 s)
   stop_grace_period: 40s
 
-# migracje przy starcie wymagają gotowej bazy; bez Redisa i Kafki API działa (Degraded) i łączy się w tle
+# schemat przy starcie wymaga gotowej bazy; bez Redisa i Kafki API działa (Degraded) i łączy się w tle
 x-api-postgres: &api-postgres
   <<: *api
   depends_on:
@@ -43,7 +44,6 @@ x-api-sqlserver: &api-sqlserver
 
 x-api-environment: &api-environment
   ASPNETCORE_ENVIRONMENT: Development # Swagger pod /swagger
-  Database__MigrateOnStartup: "true"
   ConnectionStrings__SqlServer: Server=sqlserver,1433;Database=Products;User Id=sa;Password=LocalDev_Passw0rd;TrustServerCertificate=True
   # GSS Encryption Mode=Disable: obraz chiseled nie ma bibliotek Kerberos - bez tego Npgsql próbuje szyfrowania GSS
   # i wypisuje błąd libgssapi_krb5.so.2 (połączenie i tak działa)
@@ -162,6 +162,7 @@ services:
     environment:
       <<: *api-environment
       Persistence__Orm: EfCore
+      Database__Schema: Migrations
       Persistence__Database: Postgres
       Kafka__ConsumerGroup: api-efcore-postgres
       OTEL_SERVICE_NAME: api-efcore-postgres
@@ -174,6 +175,7 @@ services:
     environment:
       <<: *api-environment
       Persistence__Orm: EfCore
+      Database__Schema: Migrations
       Persistence__Database: SqlServer
       Kafka__ConsumerGroup: api-efcore-sqlserver
       OTEL_SERVICE_NAME: api-efcore-sqlserver
@@ -186,6 +188,7 @@ services:
     environment:
       <<: *api-environment
       Persistence__Orm: Dapper
+      Database__Schema: Scripts
       Persistence__Database: Postgres
       Kafka__ConsumerGroup: api-dapper-postgres
       OTEL_SERVICE_NAME: api-dapper-postgres
@@ -198,6 +201,7 @@ services:
     environment:
       <<: *api-environment
       Persistence__Orm: Dapper
+      Database__Schema: Scripts
       Persistence__Database: SqlServer
       Kafka__ConsumerGroup: api-dapper-sqlserver
       OTEL_SERVICE_NAME: api-dapper-sqlserver

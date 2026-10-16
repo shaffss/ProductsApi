@@ -1,4 +1,5 @@
 using System.Collections.Concurrent;
+using System.Data.Common;
 using DotNet.Testcontainers.Containers;
 using Microsoft.Data.SqlClient;
 using Microsoft.EntityFrameworkCore;
@@ -10,7 +11,7 @@ using Testcontainers.PostgreSql;
 
 namespace Products.IntegrationTests.Fixtures;
 
-// Jeden kontener bazy na cały przebieg testów, w nim osobne bazy ze schematem z migracji EF
+// Jeden kontener bazy na cały przebieg testów, w nim osobne bazy (schemat z migracji EF, ze skryptów albo pusta)
 public abstract class DatabaseFixture(DatabaseEngine engine, IDatabaseContainer container) : IAsyncLifetime
 {
     private readonly ConcurrentDictionary<string, Lazy<Task<string>>> _shared = new();
@@ -27,31 +28,59 @@ public abstract class DatabaseFixture(DatabaseEngine engine, IDatabaseContainer 
 
     // Baza współdzielona (tworzona raz na klucz) - testy operują na własnych produktach
     public Task<string> GetSharedDatabaseAsync(string key) =>
-        _shared.GetOrAdd(key, _ => new(CreateDatabaseAsync)).Value;
+        _shared.GetOrAdd(key, _ => new(() => CreateDatabaseAsync())).Value;
 
-    // Nowa baza ze schematem z migracji EF (tak jak dotnet ef database update)
-    public async Task<string> CreateDatabaseAsync()
+    // Nowa baza (jak z compose: SQL Server z READ_COMMITTED_SNAPSHOT) ze schematem z migracji EF (jak dotnet ef
+    // database update), ze skryptów db/ albo pusta (None) - wtedy schemat zakłada API przy starcie (Database:Schema)
+    public async Task<string> CreateDatabaseAsync(SchemaSource schema = SchemaSource.Migrations)
     {
         var name = "test_" + Guid.NewGuid().ToString("N")[..12];
         var connectionString = WithDatabase(container.GetConnectionString(), name);
 
-        var options = new DbContextOptionsBuilder<ProductsDbContext>();
-        if (engine == DatabaseEngine.SqlServer)
-            options.UseSqlServer(connectionString, o => o.MigrationsAssembly(DatabaseMigrator.MigrationsAssembly(engine)).CommandTimeout(180));
-        else
-            options.UseNpgsql(connectionString, o => o.MigrationsAssembly(DatabaseMigrator.MigrationsAssembly(engine)).CommandTimeout(180));
-
         await _createLock.WaitAsync();
         try
         {
-            await using var db = new ProductsDbContext(options.Options);
-            await db.Database.MigrateAsync(CancellationToken.None); // baza współdzielona - nie zależy od anulowania jednego testu
+            await CreateEmptyDatabaseAsync(name);
+            // baza współdzielona - nie zależy od anulowania jednego testu
+            if (schema == SchemaSource.Migrations)
+            {
+                await using var db = new ProductsDbContext(MigrationOptions(connectionString));
+                await db.Database.MigrateAsync(CancellationToken.None);
+            }
+            else if (schema == SchemaSource.Scripts)
+            {
+                await SchemaScripts.ApplyAsync(engine, connectionString, CancellationToken.None);
+            }
         }
         finally
         {
             _createLock.Release();
         }
         return connectionString;
+    }
+
+    private async Task CreateEmptyDatabaseAsync(string name)
+    {
+        await using DbConnection connection = engine == DatabaseEngine.SqlServer
+            ? new SqlConnection(container.GetConnectionString())
+            : new NpgsqlConnection(container.GetConnectionString());
+        await connection.OpenAsync();
+        await using var command = connection.CreateCommand();
+        command.CommandTimeout = 180;
+        command.CommandText = engine == DatabaseEngine.SqlServer
+            ? $"CREATE DATABASE [{name}]; ALTER DATABASE [{name}] SET READ_COMMITTED_SNAPSHOT ON;"
+            : $"CREATE DATABASE \"{name}\"";
+        await command.ExecuteNonQueryAsync();
+    }
+
+    private DbContextOptions<ProductsDbContext> MigrationOptions(string connectionString)
+    {
+        var options = new DbContextOptionsBuilder<ProductsDbContext>();
+        if (engine == DatabaseEngine.SqlServer)
+            options.UseSqlServer(connectionString, o => o.MigrationsAssembly(DatabaseMigrator.MigrationsAssembly(engine)).CommandTimeout(180));
+        else
+            options.UseNpgsql(connectionString, o => o.MigrationsAssembly(DatabaseMigrator.MigrationsAssembly(engine)).CommandTimeout(180));
+        return options.Options;
     }
 
     private string WithDatabase(string connectionString, string name) => engine == DatabaseEngine.SqlServer

@@ -1,7 +1,7 @@
 ---
 type: Playbook
 title: Zmiana schematu bazy
-description: "Zmiana modelu EF: migracje dla obu baz, skrypty db/, porównanie schematów i bazy deweloperskie."
+description: "Zmiana modelu EF: migracje dla obu baz, skrypty db/ z historią migracji, porównanie schematów (test) i bazy deweloperskie."
 resource: ../../../src/Products.Persistence.EfCore/ProductsDbContext.cs
 tags: [database, migrations, schema]
 generated: { by: claude-code/claude-opus-5-5, at: 2026-10-15T21:30:00Z }
@@ -20,8 +20,20 @@ generated: { by: claude-code/claude-opus-5-5, at: 2026-10-15T21:30:00Z }
    ```
 
    Kolumna `NOT NULL` dodana do istniejącej tabeli dostaje w migracji `DEFAULT ''` - ustaw sensowną wartość dla istniejących wierszy.
-3. **Skrypty:** zaktualizuj `db/<baza>/Create/NNN_*.sql` (muszą zostać idempotentne) i scal je do `db/<baza>/Publish/` poleceniem `.\db\merge_files.cmd` (Windows).
-4. **Porównanie schematów:** dla każdego silnika baza z migracji i baza ze skryptów, zrzut katalogu, `diff`. Polecenia uruchamiaj z katalogu głównego repozytorium (tam jest manifest `dotnet ef`); w Git Bash najpierw `export MSYS_NO_PATHCONV=1`.
+3. **Skrypty:**
+   - zaktualizuj `db/<baza>/Create/NNN_*.sql`; muszą zostać idempotentne;
+   - dopisz Id nowej migracji (nazwa pliku migracji bez `.cs`) w `007_ef_migrations_history.sql` obu baz, żeby baza ze skryptów była dla EF zmigrowana ([decyzja](../decisions/migrations-source-of-truth.md));
+   - scal skrypty do `db/<baza>/Publish/` poleceniem `.\db\merge_files.cmd` (Windows).
+
+   Nowy plik w `Create/` trafia do `Products.Persistence` sam (zasoby `db/<baza>/Create/*.sql`), a do obrazu Dockera przez `COPY db/...`.
+4. **Porównanie schematów:**
+   - **automatycznie:** test `SchemaSourcesTests` zakłada bazę z migracji i bazę ze skryptów i porównuje ich zrzuty katalogu oraz historię migracji:
+
+     ```bash
+     dotnet test --project tests/Products.IntegrationTests -- --filter-class "*SchemaSourcesTests"
+     ```
+
+   - **ręcznie** (żeby obejrzeć cały zrzut): dla każdego silnika baza z migracji i baza ze skryptów, zrzut katalogu, `diff`. Polecenia uruchamiaj z katalogu głównego repozytorium (tam jest manifest `dotnet ef`); w Git Bash najpierw `export MSYS_NO_PATHCONV=1`.
 
    ```bash
    # SQL Server
@@ -41,7 +53,7 @@ generated: { by: claude-code/claude-opus-5-5, at: 2026-10-15T21:30:00Z }
    ```
 
    Zrzut obejmuje kolumny z typami i wartościami domyślnymi, klucze, klucze obce, CHECK, indeksy (z filtrami) i dane `Currencies`. Nazwy domyślnych constraintów SQL Server są pomijane, bo EF nadaje własne. Zapytania: [schema-dump-sqlserver.sql](../references/schema-dump-sqlserver.sql), [schema-dump-postgres.sql](../references/schema-dump-postgres.sql).
-5. **Bazy deweloperskie:** kontener API stosuje migracje przy starcie (`docker compose --profile <wariant> up -d --build`); lokalnie `dotnet ef database update --project ...`.
-6. **Testy:** przy zmianie SQL w `SqlDialect` testy integracyjne obejmują wszystkie warianty (`ProductRepositoryTests`, `MessagingStoreTests`, `ApiEndToEndTests`).
+5. **Bazy deweloperskie:** kontener API zakłada schemat przy starcie (`docker compose --profile <wariant> up -d --build`; EF z migracji, Dapper ze skryptów). Lokalnie `dotnet ef database update --project ...` albo `--Database:Schema=Migrations` / `Scripts`.
+6. **Testy:** przy zmianie SQL w `SqlDialect` testy integracyjne obejmują wszystkie warianty (`ProductRepositoryTests`, `MessagingStoreTests`, `ApiEndToEndTests`). Testy end-to-end zakładają schemat przez API, jak compose.
 
 Powiązane: [Migracje EF jako źródło prawdy schematu](../decisions/migrations-source-of-truth.md), [Schemat bazy](../contracts/database-schema.md)

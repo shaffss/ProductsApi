@@ -123,13 +123,16 @@ public sealed class ApiEndToEndTests(SqlServerFixture sqlServer, PostgresFixture
         Assert.Equal(first.Headers.Location, retry.Headers.Location);
     }
 
-    // Każdy test na własnej bazie; telemetria wyłączona (appsettings.Development.json wskazuje Aspire Dashboard)
+    // Każdy test na własnej, pustej bazie - schemat zakłada API przy starcie, jak w compose: warianty EF z migracji,
+    // warianty Dappera ze skryptów. Telemetria wyłączona (appsettings.Development.json wskazuje Aspire Dashboard).
     private async Task<WebApplicationFactory<Program>> CreateFactoryAsync(OrmKind orm, DatabaseEngine engine)
     {
         DatabaseFixture database = engine == DatabaseEngine.SqlServer ? sqlServer : postgres;
-        var connectionString = await database.CreateDatabaseAsync();
+        var connectionString = await database.CreateDatabaseAsync(SchemaSource.None);
+        var schema = orm == OrmKind.EfCore ? SchemaSource.Migrations : SchemaSource.Scripts;
         return new WebApplicationFactory<Program>().WithWebHostBuilder(host => host
             .UseEnvironment("Development")
+            .UseSetting("Database:Schema", schema.ToString())
             .UseSetting("Persistence:Orm", orm.ToString())
             .UseSetting("Persistence:Database", engine.ToString())
             .UseSetting($"ConnectionStrings:{engine}", connectionString)

@@ -24,7 +24,7 @@ docker compose --profile "*" down                         # zatrzymanie i usuni�
   - Samo `docker compose down` pomija kontenery z profili, których polecenie nie wskazuje, stąd `--profile "*"`.
   - Kontenery nie mają polityki restartu, więc po restarcie Dockera nic nie wstaje samo.
 
-Kontenery API same stosują migracje przy starcie (`Database__MigrateOnStartup=true`). Bazy zakładane są wcześniej: PostgreSQL przez `POSTGRES_DB`, SQL Server przez jednorazowy kontener `sqlserver-init` - [pułapka](../pitfalls/concurrent-database-creation.md).
+Kontenery API same zakładają schemat przy starcie (`Database__Schema`): warianty EF z migracji, warianty Dappera ze skryptów `db/` - ten sam wynik ([decyzja](../decisions/migrations-source-of-truth.md)). Bazy zakładane są wcześniej: PostgreSQL przez `POSTGRES_DB`, SQL Server przez jednorazowy kontener `sqlserver-init` - [pułapka](../pitfalls/concurrent-database-creation.md).
 
 # API z dotnet run albo Visual Studio
 
@@ -39,7 +39,7 @@ dotnet run --project src/Products.Api
 - **Warianty SQL Server:** `docker compose --profile sqlserver up -d` i `dotnet ef database update --project src/Products.Migrations.SqlServer`.
 
 - **Profile:** `EfCore-Postgres`, `EfCore-SqlServer`, `Dapper-Postgres`, `Dapper-SqlServer` - wszystkie na http://localhost:5032, VS otwiera Swaggera. Pierwszy na liście jest domyślny dla `dotnet run` bez `--launch-profile`.
-- **Profil `Launcher`** (tylko Windows) pokazuje okno wyboru ORM, bazy, Redisa, Kafki i migracji przy starcie; ostatni wybór zapisuje w `%LOCALAPPDATA%\ProductsApi\launcher.json`.
+- **Profil `Launcher`** (tylko Windows) pokazuje okno wyboru ORM, bazy, Redisa, Kafki i schematu przy starcie (brak, migracje EF albo skrypty `db/`); ostatni wybór zapisuje w `%LOCALAPPDATA%\ProductsApi\launcher.json`.
   - Musi być ostatni na liście, inaczej `dotnet run` bez profilu otwierałby okno (a na Linuksie kończył się błędem).
   - Okno to skrypt `DevLauncher/launcher.ps1` (WinForms) uruchamiany jako osobny proces. Wybór trafia do API jako argumenty `--Klucz=wartość`, więc debugger VS zostaje podpięty do API.
   - Skrypt musi mieć BOM UTF-8 (Windows PowerShell 5.1 czyta pliki bez BOM jako ANSI i psuje polskie znaki) i nie trafia do publikacji ani obrazu Dockera.

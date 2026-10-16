@@ -19,4 +19,8 @@
   <ItemGroup>
     <ProjectReference Include="..\..\src\Products.Api\Products.Api.csproj" />
   </ItemGroup>
+  <!-- zapytania porównujące schematy z bazy wiedzy - test zgodności migracji i skryptów (SchemaSourcesTests) -->
+  <ItemGroup>
+    <None Include="..\..\docs\knowledge\references\schema-dump-*.sql" Link="SchemaDumps\%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
 </Project>

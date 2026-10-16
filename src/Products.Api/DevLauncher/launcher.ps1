@@ -6,7 +6,7 @@ Add-Type -AssemblyName System.Windows.Forms, System.Drawing
 [System.Windows.Forms.Application]::EnableVisualStyles()
 
 $settingsPath = Join-Path $env:LOCALAPPDATA 'ProductsApi\launcher.json'
-$settings = [ordered]@{ Orm = 'EfCore'; Database = 'Postgres'; Cache = $true; Kafka = $true; Migrate = $false }
+$settings = [ordered]@{ Orm = 'EfCore'; Database = 'Postgres'; Cache = $true; Kafka = $true; Schema = 'None' }
 if (Test-Path $settingsPath) {
     $saved = Get-Content $settingsPath -Raw | ConvertFrom-Json
     foreach ($key in @($settings.Keys)) { if ($null -ne $saved.$key) { $settings[$key] = $saved.$key } }
@@ -37,12 +37,13 @@ $orm = New-Combo @('EfCore', 'Dapper') $settings.Orm
 $database = New-Combo @('Postgres', 'SqlServer') $settings.Database
 $cache = New-Check 'Redis (cache-aside)' $settings.Cache
 $kafka = New-Check 'Kafka (outbox + konsument)' $settings.Kafka
-$migrate = New-Check 'Migracje przy starcie' $settings.Migrate
+# schemat przy starcie: None (już jest), Migrations (migracje EF), Scripts (skrypty db/, bez EF) - ten sam wynik
+$schema = New-Combo @('None', 'Migrations', 'Scripts') $settings.Schema
 Add-Row 'ORM' $orm
 Add-Row 'Baza danych' $database
 Add-Row 'Cache' $cache
 Add-Row 'Zdarzenia' $kafka
-Add-Row 'Schemat' $migrate
+Add-Row 'Schemat przy starcie' $schema
 
 $buttons = New-Object System.Windows.Forms.FlowLayoutPanel -Property @{ AutoSize = $true; Anchor = 'Right'; Margin = '3,12,3,3' }
 $ok = New-Object System.Windows.Forms.Button -Property @{ Text = 'Uruchom'; DialogResult = 'OK' }
@@ -57,7 +58,7 @@ if ($form.ShowDialog() -ne 'OK') { exit 1 }
 
 $settings = [ordered]@{
     Orm = $orm.SelectedItem; Database = $database.SelectedItem
-    Cache = $cache.Checked; Kafka = $kafka.Checked; Migrate = $migrate.Checked
+    Cache = $cache.Checked; Kafka = $kafka.Checked; Schema = $schema.SelectedItem
 }
 New-Item -ItemType Directory -Force (Split-Path $settingsPath) | Out-Null
 $settings | ConvertTo-Json | Set-Content $settingsPath -Encoding UTF8
@@ -66,4 +67,4 @@ $settings | ConvertTo-Json | Set-Content $settingsPath -Encoding UTF8
 "--Persistence:Database=$($settings.Database)"
 "--Cache:Enabled=$($settings.Cache)"
 "--Kafka:Enabled=$($settings.Kafka)"
-"--Database:MigrateOnStartup=$($settings.Migrate)"
+"--Database:Schema=$($settings.Schema)"

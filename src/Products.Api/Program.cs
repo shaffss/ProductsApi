@@ -30,13 +30,16 @@ var app = builder.Build();
 var persistence = app.Services.GetRequiredService<PersistenceOptions>();
 LogVariant(app.Logger, persistence.Variant);
 
-// Database:MigrateOnStartup (włączone w docker-compose.yml) - schemat z migracji EF przy starcie,
+// Database:Schema (ustawione w docker-compose.yml) - schemat przy starcie z migracji EF albo ze skryptów db/,
 // zamiast ręcznego dotnet ef database update
-if (app.Configuration.GetValue<bool>("Database:MigrateOnStartup"))
+var schema = app.Configuration.GetValue<SchemaSource>("Database:Schema");
+if (schema != SchemaSource.None)
 {
     var connectionString = app.Configuration.GetConnectionString(persistence.Database.ToString())!;
-    await DatabaseMigrator.MigrateAsync(persistence.Database, connectionString, app.Lifetime.ApplicationStopping);
-    LogMigrated(app.Logger);
+    await (schema == SchemaSource.Migrations
+        ? DatabaseMigrator.MigrateAsync(persistence.Database, connectionString, app.Lifetime.ApplicationStopping)
+        : SchemaScripts.ApplyAsync(persistence.Database, connectionString, app.Lifetime.ApplicationStopping));
+    LogSchemaReady(app.Logger, schema);
 }
 
 app.UseExceptionHandler();
@@ -60,6 +63,6 @@ public partial class Program
     [LoggerMessage(Level = LogLevel.Information, Message = "Persistence: {Variant}")]
     private static partial void LogVariant(ILogger logger, string variant);
 
-    [LoggerMessage(Level = LogLevel.Information, Message = "Database migrated")]
-    private static partial void LogMigrated(ILogger logger);
+    [LoggerMessage(Level = LogLevel.Information, Message = "Database schema ready ({Schema})")]
+    private static partial void LogSchemaReady(ILogger logger, SchemaSource schema);
 }

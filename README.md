@@ -31,7 +31,7 @@ docker compose --profile efcore-postgres up -d
 - **Bez profilu** `docker compose up -d` uruchamia samą infrastrukturę domyślnego wariantu (PostgreSQL, Redis, Kafka) pod `dotnet run`, zgodnie z sekwencją z zadania. Domyślny profil jest w pliku `.env`.
 - **Zatrzymanie:** `docker compose --profile "*" down` usuwa wszystkie kontenery projektu, a dane zostają w wolumenach. Samo `docker compose down` pomija kontenery z profili, których polecenie nie wskazuje. Kontenery nie mają polityki restartu, więc po restarcie Dockera nic nie wstaje samo.
 
-> **Migracje stosowane automatycznie.** Kontenery API mają włączone `Database__MigrateOnStartup=true`, więc przy starcie stosują migracje EF Core do swojej bazy i `dotnet ef database update` nie jest potrzebne. API startuje dopiero, gdy baza już istnieje. Bazę PostgreSQL zakłada kontener `postgres` (`POSTGRES_DB`), a bazę SQL Server jednorazowy kontener `sqlserver-init` (skrypt `db/sqlserver/Create/000_database.sql`). Kilka wariantów na jednej bazie (kilka `--profile`) może więc startować jednocześnie, bo EF Core blokuje bazę na czas migracji.
+> **Schemat zakładany automatycznie.** Kontener API zakłada schemat swojej bazy przy starcie (`Database__Schema`), więc `dotnet ef database update` nie jest potrzebne. Warianty EF Core stosują migracje EF, a warianty Dappera skrypty z `db/<baza>/Create`, bez EF. Wynik jest ten sam (sprawdza to test), więc warianty mogą na zmianę używać jednej bazy. API startuje dopiero, gdy baza już istnieje. Bazę PostgreSQL zakłada kontener `postgres` (`POSTGRES_DB`), a bazę SQL Server jednorazowy kontener `sqlserver-init` (skrypt `db/sqlserver/Create/000_database.sql`). Kilka wariantów na jednej bazie (kilka `--profile`) może więc startować jednocześnie, bo zakładanie schematu odbywa się pod blokadą w bazie.
 
 Działający wariant pokazuje `GET /health` w polu `variant`. Kolekcja Postmana jest opisana w sekcji [Weryfikacja](#weryfikacja).
 
@@ -49,7 +49,7 @@ dotnet run --project src/Products.Api
 - **Migracje:** `dotnet ef database update` tworzy bazę (`products` w PostgreSQL, `Products` w SQL Server) i schemat. Dla wariantów SQL Server: `dotnet ef database update --project src/Products.Migrations.SqlServer`. Connection string do kontenera z compose jest domyślny; inną bazę wskazuje zmienna `ConnectionStrings__Postgres` / `ConnectionStrings__SqlServer`.
 - **Domyślny wariant** `dotnet run` (bez profilu) to EF Core + PostgreSQL.
 - **Profile uruchomieniowe** (`launchSettings.json`): `EfCore-Postgres`, `EfCore-SqlServer`, `Dapper-Postgres`, `Dapper-SqlServer`. Wszystkie działają na http://localhost:5032. W Visual Studio wybierasz profil z listy przy przycisku Start (projekt startowy: `Products.Api`), a VS otwiera Swaggera.
-- **Profil `Launcher`** (tylko Windows) przed startem API pokazuje okno wyboru: ORM, baza, Redis, Kafka, migracje przy starcie. Ostatni wybór jest zapamiętany, a debugger VS zostaje podpięty do API. To samo z linii poleceń: `dotnet run --project src/Products.Api -- --launcher`.
+- **Profil `Launcher`** (tylko Windows) przed startem API pokazuje okno wyboru: ORM, baza, Redis, Kafka i schemat przy starcie (brak, migracje EF albo skrypty `db/`). Ostatni wybór jest zapamiętany, a debugger VS zostaje podpięty do API. To samo z linii poleceń: `dotnet run --project src/Products.Api -- --launcher`.
 - **Wariant bez profilu:**
   ```bash
   dotnet run --project src/Products.Api -- --Persistence:Orm=Dapper --Persistence:Database=SqlServer
@@ -62,7 +62,7 @@ dotnet run --project src/Products.Api
 |---|---|---|
 | `Persistence:Orm` | `EfCore` | `EfCore` albo `Dapper` |
 | `Persistence:Database` | `Postgres` | `Postgres` albo `SqlServer`; connection string z `ConnectionStrings:<Database>` |
-| `Database:MigrateOnStartup` | `false` | migracje przy starcie (`true` w compose) |
+| `Database:Schema` | `None` | schemat przy starcie: `Migrations` (migracje EF), `Scripts` (skrypty `db/<baza>/Create`, bez EF) albo `None`; w compose EF → `Migrations`, Dapper → `Scripts` |
 | `Cache:Enabled` / `Cache:ProductTtl` | `true` / `00:05:00` | Redis (`ConnectionStrings:Redis`); wyłączenie np. w benchmarkach bazy |
 | `Kafka:Enabled` | `true` | wysyłka outboxa i konsument; `false` = zdarzenia zostają w outboxie |
 | `Kafka:BootstrapServers` | — | lokalnie `localhost:9094`, w compose `kafka:9092` |
@@ -125,7 +125,7 @@ If-Match: "1"
 | Krok | Jak sprawdzić |
 |---|---|
 | 9. Redis, Kafka i baza | `docker compose up -d` (PostgreSQL, Redis, Kafka); od razu z API w kontenerze: `docker compose --profile efcore-postgres up -d` |
-| 10. Migracja inicjalna | `dotnet ef database update --project src/Products.Migrations.Postgres`; API w kontenerze wykonuje ją samo przy starcie (`docker logs api-efcore-postgres` → `Database migrated`) |
+| 10. Migracja inicjalna | `dotnet ef database update --project src/Products.Migrations.Postgres`; API w kontenerze zakłada schemat samo przy starcie (`docker logs api-efcore-postgres` → `Database schema ready (Migrations)`) |
 | 11. API | `dotnet run --project src/Products.Api` (port 5032) albo kontener wariantu (porty 8081–8084); `GET /health` → `Healthy`, `variant`, stan bazy, Redisa i Kafki |
 | 12. Utworzenie produktu | Postman 1.2: `201`, `Location` |
 | 13. Pierwszy odczyt: z bazy, zapis do Redisa | Postman 1.3: `X-Cache: MISS`; `docker exec redis redis-cli GET product:<id>` i `TTL product:<id>` (~300 s) |
@@ -153,7 +153,7 @@ docker exec rekrutacja-kafka /opt/kafka/bin/kafka-console-consumer.sh --bootstra
 dotnet test
 ```
 
-Uruchamia 95 testów kodu i sprawdzenie [bazy wiedzy](#baza-wiedzy) (po jednym przypadku na plik), razem w około 1 min. Testy integracyjne wymagają działającego Dockera.
+Uruchamia 99 testów kodu i sprawdzenie [bazy wiedzy](#baza-wiedzy) (po jednym przypadku na plik), razem w około 1 min. Testy integracyjne wymagają działającego Dockera.
 
 - **Jednostkowe** (`tests/Products.UnitTests`, 28 testów) sprawdzają logikę z Core, bez infrastruktury:
   - scenariusze z zadania: cena ≤ 0, zmiana ceny nieistniejącego produktu, unieważnienie cache, poprzednia i nowa cena w zdarzeniu;
@@ -161,12 +161,13 @@ Uruchamia 95 testów kodu i sprawdzenie [bazy wiedzy](#baza-wiedzy) (po jednym p
   - `Idempotency-Key` (ponowienie, inna treść, niepoprawny klucz), konflikt wersji (`If-Match`), jedno zapytanie do bazy przy równoczesnych odczytach spoza cache, typ i ślad w wiadomości outboxa.
 
   W tym samym projekcie `KnowledgeBundleTests` sprawdza bazę wiedzy: po jednym przypadku na plik (`type` i poprawny YAML w każdym pojęciu, istniejące linki i ścieżki `resource`), plus format `index.md` i `log.md`.
-- **Integracyjne** (`tests/Products.IntegrationTests`, 67 testów) działają na Testcontainers, z własnymi kontenerami SQL Server, PostgreSQL, Redis i Kafka:
+- **Integracyjne** (`tests/Products.IntegrationTests`, 71 testów) działają na Testcontainers, z własnymi kontenerami SQL Server, PostgreSQL, Redis i Kafka:
   - repozytoria w 4 wariantach, w tym 20 równoczesnych zmian ceny bez utraty żadnej, warunek wersji i 10 równoczesnych utworzeń z tym samym kluczem idempotencji (powstaje jeden produkt);
   - outbox: kolejność, ponawianie, dead-letter po limicie błędów trwałych (błędy przejściowe nie zużywają prób), ślad żądania, blokada jednej instancji;
   - idempotentny konsument i retencja (usuwa tylko przeterminowane dane, dead-letter zostaje);
   - cache przy niedostępnym Redisie i przy uszkodzonym wpisie;
-  - end-to-end przez HTTP dla 4 wariantów: API → baza → Redis → outbox → Kafka (nagłówki `event-type` i `traceparent` z trace-id żądania) → konsument, a także `Idempotency-Key` i `If-Match`.
+  - zgodność schematu: migracje EF i skrypty `db/` dają ten sam schemat i tę samą historię migracji (zapytania porównujące z bazy wiedzy), a obie drogi można przełączać na jednej bazie;
+  - end-to-end przez HTTP dla 4 wariantów, na pustej bazie, na której schemat zakłada API przy starcie (jak w compose): API → baza → Redis → outbox → Kafka (nagłówki `event-type` i `traceparent` z trace-id żądania) → konsument, a także `Idempotency-Key` i `If-Match`.
 
 **CI** (`.github/workflows/ci.yml`, GitHub Actions): format i analizatory (`dotnet format --verify-no-changes`), build Release, testy jednostkowe i integracyjne (Docker na runnerze), obraz Dockera.
 
@@ -201,7 +202,8 @@ src/
                                   zdarzenie ProductPriceChanged, ślady i metryki (ProductsTelemetry), kontrakty
   Products.Infrastructure         Redis (cache), Kafka (wysyłka outboxa, konsument)
   Products.Persistence            wspólne dla ORM: SqlDialect (SQL i typy parametrów per baza), outbox,
-                                  ProcessedEvents i retencja (ADO.NET), ponawianie, health check bazy
+                                  ProcessedEvents i retencja (ADO.NET), ponawianie, health check bazy,
+                                  schemat ze skryptów db/ (SchemaScripts)
   Products.Persistence.EfCore     DbContext, konfiguracje modelu, repozytoria EF
   Products.Persistence.Dapper     repozytoria Dappera
   Products.Migrations.SqlServer   migracje EF dla SQL Server
@@ -244,8 +246,9 @@ postman/                          kolekcja i środowiska Postmana
   - JSON jest generowany przy kompilacji, logi przez `[LoggerMessage]` (bez alokacji, gdy poziom jest wyłączony);
   - ta sama polityka ponawiania przy błędach przejściowych bazy (zerwane połączenie, deadlock): EF Core `EnableRetryOnFailure`, Dapper `DbRetry`, po 3 ponowienia;
   - SQL Server z `READ_COMMITTED_SNAPSHOT` (odczyty nie czekają na blokady zapisów), czyli ta sama semantyka co MVCC w PostgreSQL. EF Core włącza tę opcję sam, gdy tworzy bazę; skrypt `db/sqlserver/Create/000_database.sql` też. Dla bazy utworzonej inaczej: `ALTER DATABASE Products SET READ_COMMITTED_SNAPSHOT ON`.
-- **Schema:** źródłem prawdy są migracje EF. Skrypty w `db/` dają identyczny schemat (sprawdzone porównaniem katalogów obu baz):
+- **Schema:** źródłem prawdy są migracje EF. Skrypty w `db/` dają identyczny schemat i zapisują tę samą historię migracji EF, więc obie drogi są zamienne na jednej bazie. Pilnuje tego test `SchemaSourcesTests`, który porównuje katalogi systemowe obu baz.
   - `Create/` zawiera schemat, `Demo/` 10 produktów demo, a `Benchmark/` generator 100 tys. produktów;
+  - API może zakładać schemat przy starcie z migracji albo ze skryptów `Create/` wbudowanych w `Products.Persistence` (`Database:Schema`). Skrypty SQL Server są dzielone po `GO`, a `000_database.sql` (zakłada bazę, wymaga `sqlcmd`/`psql`) jest pomijany;
   - `db/merge_files.cmd` scala je do `Publish/*.sql`.
 
   Wgranie danych demo (cmd lub bash; w Git Bash poprzedź polecenia `MSYS_NO_PATHCONV=1`, inaczej ścieżki `/opt/...` i `/dev/stdin` zostaną zamienione na ścieżki Windows):
@@ -276,6 +279,6 @@ Wejście: [docs/knowledge/index.md](docs/knowledge/index.md). Test `KnowledgeBun
 - **Wyścig cache-aside:** odczyt z bazy przed zmianą ceny może zapisać do cache starą wartość już po jej unieważnieniu. Drugie unieważnienie (konsument zdarzenia) zwykle to naprawia, a w najgorszym razie nieaktualność trwa najwyżej TTL. Pełnym rozwiązaniem byłby zapis do cache warunkowy po `Version` (skrypt Lua).
 - **Dead-letter jako tabela:** wiadomości po limicie prób zostają w `OutboxMessages` (log `Error`, metryka). W większym systemie byłby topic `*.DLT` z alertem i narzędziem do ponownej wysyłki.
 - **Klucze idempotencji są globalne:** bez uwierzytelniania nie ma do kogo ich przypisać. Z uwierzytelnianiem klucz powinien być unikalny w obrębie klienta.
-- **Migracje przy starcie** są wygodne lokalnie. Na produkcji migracje powinien wykonywać osobny krok wdrożenia (np. `dotnet ef migrations bundle`), a nie każda instancja API.
+- **Schemat zakładany przy starcie** jest wygodny lokalnie. Na produkcji powinien to robić osobny krok wdrożenia (np. `dotnet ef migrations bundle` albo uruchomienie skryptów), a nie każda instancja API.
 - **Bezpieczeństwo:** uwierzytelnianie, HTTPS, sekrety w menedżerze sekretów zamiast konfiguracji, osobny użytkownik bazy z minimalnymi uprawnieniami (bez `sa` / `postgres`), Aspire Dashboard z logowaniem.
 - **Lista produktów ze stronicowaniem** (opcjonalna w zadaniu) nie jest zaimplementowana. Sekwencyjne Id (UUIDv7 / `NEWSEQUENTIALID`) pozwalają na tanie stronicowanie po kluczu.

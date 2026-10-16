@@ -5,7 +5,7 @@
 
 # Baza danych
 
-* [Migracje EF jako źródło prawdy schematu](migrations-source-of-truth.md) - Schemat obu baz pochodzi z migracji EF Core; skrypty w db/ dają identyczny schemat, sprawdzany porównaniem katalogów.
+* [Migracje EF jako źródło prawdy schematu](migrations-source-of-truth.md) - Schemat obu baz pochodzi z migracji EF Core; skrypty w db/ dają ten sam schemat i historię migracji (test), więc API może zakładać schemat jedną albo drugą drogą.
 * [READ_COMMITTED_SNAPSHOT zamiast READPAST](rcsi-not-readpast.md) - Odczyt outboxa w SQL Server nie czeka na niezatwierdzone transakcje dzięki wersjonowaniu wierszy, a nie hintowi READPAST.
 * [Słownik walut z kluczem po kodzie](currency-dictionary.md) - Waluty w tabeli Currencies (klucz Id, unikalny kod), produkty odwołują się do kodu ISO - odczyt bez złączenia, walidacja z pamięci.
 

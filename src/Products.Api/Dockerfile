@@ -13,6 +13,9 @@ COPY src/Products.Migrations.SqlServer/Products.Migrations.SqlServer.csproj src/
 COPY src/Products.Migrations.Postgres/Products.Migrations.Postgres.csproj src/Products.Migrations.Postgres/
 RUN dotnet restore src/Products.Api/Products.Api.csproj
 COPY src/ src/
+# skrypty schematu wbudowane w Products.Persistence (Database:Schema=Scripts)
+COPY db/sqlserver/Create/ db/sqlserver/Create/
+COPY db/postgres/Create/ db/postgres/Create/
 RUN dotnet publish src/Products.Api/Products.Api.csproj -c Release -o /app --no-restore
 
 # Chiseled: bez powłoki i menedżera pakietów - mniejszy obraz i mniejsza powierzchnia ataku.

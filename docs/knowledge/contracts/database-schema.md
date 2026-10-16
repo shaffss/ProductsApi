@@ -17,6 +17,7 @@ Kolumny i typy są w migracjach ([SQL Server](../../../src/Products.Migrations.S
 | `OutboxMessages` | zdarzenia do wysłania - [Outbox](../mechanisms/outbox.md) | PK `Id` (kolejność wysyłki); filtrowane: `IX_OutboxMessages_Pending` (niewysłane) i `IX_OutboxMessages_ProcessedAtUtc` (wysłane, retencja) |
 | `ProcessedEvents` | zdarzenia obsłużone przez odbiorcę - [Inbox](../mechanisms/inbox.md) | PK `(Consumer, EventId)`, indeks `ProcessedAtUtc` (retencja) |
 | `IdempotencyKeys` | klucze POST - [Idempotency-Key](../mechanisms/idempotency-key.md) | PK `Key`, FK `ProductId`, indeks `CreatedAtUtc` (retencja) |
+| `__EFMigrationsHistory` | zastosowane migracje EF; zapisują je też skrypty `db/` - [decyzja](../decisions/migrations-source-of-truth.md) | PK `MigrationId` |
 
 Indeksy są tylko jawne: automatyczny indeks na każdym kluczu obcym (np. `Products.Currency` z 3 wartościami) nie przyspiesza odczytów, a spowalnia każdy zapis.
 
