@@ -40,6 +40,8 @@ dotnet run --project src/Products.Api
 
 - **Profile:** `EfCore-Postgres`, `EfCore-SqlServer`, `Dapper-Postgres`, `Dapper-SqlServer` - wszystkie na http://localhost:5032, VS otwiera Swaggera. Pierwszy na liście jest domyślny dla `dotnet run` bez `--launch-profile`.
 - **Profil `Launcher`** (tylko Windows) pokazuje okno wyboru ORM, bazy, Redisa, Kafki i schematu przy starcie (brak, migracje EF albo skrypty `db/`); ostatni wybór zapisuje w `%LOCALAPPDATA%\ProductsApi\launcher.json`.
+  - **Kontenery (compose):** przed startem API uruchamia tylko to, czego wariant potrzebuje - bazę (`postgres` albo `sqlserver`), a Redis i Kafkę, jeśli są zaznaczone. `docker compose up -d --wait` czeka na gotowość; jednorazowy `sqlserver-init` idzie osobno (`run --rm`), bo `--wait` traktuje zakończony kontener jak błąd. Błąd Dockera pokazuje okno z wyjściem `docker compose` i anuluje start.
+  - Wyjście `docker compose` nie trafia na stdout skryptu, bo tam są argumenty dla API.
   - Musi być ostatni na liście, inaczej `dotnet run` bez profilu otwierałby okno (a na Linuksie kończył się błędem).
   - Okno to skrypt `DevLauncher/launcher.ps1` (WinForms) uruchamiany jako osobny proces. Wybór trafia do API jako argumenty `--Klucz=wartość`, więc debugger VS zostaje podpięty do API.
   - Skrypt musi mieć BOM UTF-8 (Windows PowerShell 5.1 czyta pliki bez BOM jako ANSI i psuje polskie znaki) i nie trafia do publikacji ani obrazu Dockera.

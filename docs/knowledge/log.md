@@ -1,6 +1,7 @@
 # Historia zmian
 
 ## 2026-10-16
+* **Aktualizacja**: launcher uruchamia kontenery wybranego wariantu ([uruchomienie lokalne](playbooks/run-locally.md)).
 * **Aktualizacja**: schemat przy starcie z migracji EF albo ze skryptów `db/` (`Database:Schema`), zamienne na jednej bazie dzięki historii migracji w skryptach i pilnowane testem - [decyzja](decisions/migrations-source-of-truth.md), [zmiana schematu](playbooks/schema-change.md), [schemat bazy](contracts/database-schema.md), [uruchomienie lokalne](playbooks/run-locally.md).
 * **Aktualizacja**: Compose uruchamia minimum jednego wariantu (profile), bez polityki restartu - [uruchomienie lokalne](playbooks/run-locally.md), [benchmarki](playbooks/run-benchmarks.md), [cztery warianty](decisions/four-variants.md); nowa pułapka [down a profile](pitfalls/compose-down-profiles.md).
 * **Aktualizacja**: zmiana ceny w EF bez automatycznego savepointu - ponowny pomiar w [wynikach](references/benchmark-results.md), zasada w [uczciwym porównaniu](decisions/fair-comparison.md).

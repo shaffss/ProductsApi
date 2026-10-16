@@ -49,7 +49,7 @@ dotnet run --project src/Products.Api
 - **Migracje:** `dotnet ef database update` tworzy bazę (`products` w PostgreSQL, `Products` w SQL Server) i schemat. Dla wariantów SQL Server: `dotnet ef database update --project src/Products.Migrations.SqlServer`. Connection string do kontenera z compose jest domyślny; inną bazę wskazuje zmienna `ConnectionStrings__Postgres` / `ConnectionStrings__SqlServer`.
 - **Domyślny wariant** `dotnet run` (bez profilu) to EF Core + PostgreSQL.
 - **Profile uruchomieniowe** (`launchSettings.json`): `EfCore-Postgres`, `EfCore-SqlServer`, `Dapper-Postgres`, `Dapper-SqlServer`. Wszystkie działają na http://localhost:5032. W Visual Studio wybierasz profil z listy przy przycisku Start (projekt startowy: `Products.Api`), a VS otwiera Swaggera.
-- **Profil `Launcher`** (tylko Windows) przed startem API pokazuje okno wyboru: ORM, baza, Redis, Kafka i schemat przy starcie (brak, migracje EF albo skrypty `db/`). Ostatni wybór jest zapamiętany, a debugger VS zostaje podpięty do API. To samo z linii poleceń: `dotnet run --project src/Products.Api -- --launcher`.
+- **Profil `Launcher`** (tylko Windows) przed startem API pokazuje okno wyboru: ORM, baza, Redis, Kafka i schemat przy starcie (brak, migracje EF albo skrypty `db/`). Opcja „Kontenery (compose)” najpierw uruchamia w Dockerze bazę wybranego wariantu oraz Redis i Kafkę, jeśli są zaznaczone, i czeka na ich gotowość. Wtedy osobne `docker compose up -d` nie jest potrzebne. Ostatni wybór jest zapamiętany, a debugger VS zostaje podpięty do API. To samo z linii poleceń: `dotnet run --project src/Products.Api -- --launcher`.
 - **Wariant bez profilu:**
   ```bash
   dotnet run --project src/Products.Api -- --Persistence:Orm=Dapper --Persistence:Database=SqlServer
