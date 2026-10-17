@@ -19,7 +19,7 @@ SQL Server działa z `READ_COMMITTED_SNAPSHOT ON`. Zapytanie o paczkę [outboxa]
 
 # Konsekwencje
 
-- **EF Core** włącza RCSI sam, gdy tworzy bazę SQL Server (`dotnet ef database update`, migracje przy starcie). Skrypt `000_database.sql` robi to warunkowo.
+- **EF Core** włącza RCSI sam, gdy tworzy bazę SQL Server (`dotnet ef database update`, migracje przy starcie). Skrypt `000_database.sql` i kontener `sqlserver-init` w compose robią to warunkowo.
 - **Baza utworzona inaczej** wymaga ręcznego `ALTER DATABASE Products SET READ_COMMITTED_SNAPSHOT ON`. Bez tego wszystko działa poprawnie, tylko odczyt paczki czasem chwilę czeka na zatwierdzenie zmiany ceny.
 - **ALTER nie jest w migracji:** EF ostrzega przed operacją poza transakcją migracji, a `ROLLBACK IMMEDIATE` przy równoległym starcie przerwałby migrację drugiej instancji.
 - **Oznaczanie wysłanych** wiadomości używa jawnej listy `Id`, nie zakresu, bo niezatwierdzone transakcje mogą mieć `Id` ze środka zakresu.

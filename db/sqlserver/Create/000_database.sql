@@ -1,5 +1,6 @@
 -- SQL Server: baza Products
 -- Skrypty są idempotentne - można je uruchamiać wielokrotnie, osobno lub scalone (merge_files.cmd).
+-- Te same instrukcje wykonuje usługa sqlserver-init w docker-compose.yml - przy zmianie popraw oba miejsca.
 
 IF DB_ID(N'Products') IS NULL
     CREATE DATABASE [Products];

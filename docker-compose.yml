@@ -73,16 +73,30 @@ services:
       retries: 30
     stop_grace_period: 30s # checkpoint przy zamknięciu - bez odtwarzania dziennika przy kolejnym starcie
 
-  # Jednorazowo: baza Products z READ_COMMITTED_SNAPSHOT, zanim wystartują API (skrypt idempotentny)
+  # Jednorazowo: baza Products z READ_COMMITTED_SNAPSHOT, zanim wystartują API (idempotentnie).
+  # Te same instrukcje co db/sqlserver/Create/000_database.sql, ale w poleceniu zamiast podmontowanego pliku:
+  # Docker Desktop potrafi zawiesić start kontenera z plikiem montowanym z dysku Windows.
   sqlserver-init:
     image: mcr.microsoft.com/mssql/server:2025-CU9-GDR1-ubuntu-24.04
     container_name: sqlserver-init
     profiles: [sqlserver, efcore-sqlserver, dapper-sqlserver]
     depends_on:
       sqlserver: { condition: service_healthy }
-    volumes:
-      - ./db/sqlserver/Create/000_database.sql:/init/000_database.sql:ro
-    entrypoint: ["/opt/mssql-tools18/bin/sqlcmd", "-S", "sqlserver", "-U", "sa", "-P", "LocalDev_Passw0rd", "-C", "-b", "-i", "/init/000_database.sql"]
+    entrypoint:
+      - /opt/mssql-tools18/bin/sqlcmd
+      - -S
+      - sqlserver
+      - -U
+      - sa
+      - -P
+      - LocalDev_Passw0rd
+      - -C
+      - -b
+      - -Q
+      - >-
+        IF DB_ID(N'Products') IS NULL CREATE DATABASE [Products];
+        IF EXISTS (SELECT 1 FROM sys.databases WHERE name = N'Products' AND is_read_committed_snapshot_on = 0)
+        ALTER DATABASE [Products] SET READ_COMMITTED_SNAPSHOT ON WITH ROLLBACK IMMEDIATE;
 
   postgres:
     image: postgres:18.6
