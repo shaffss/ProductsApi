@@ -231,23 +231,24 @@ public sealed class ProductServiceTests
         Assert.Null(_repository.LastListRequest);
     }
 
-    [Fact]
-    public async Task Delete_removes_product_and_its_cache_entry()
-    {
-        var product = _repository.Add();
-        await _cache.SetAsync(product);
-
-        Assert.True(await _service.DeleteAsync(product.Id, Ct));
-        Assert.Empty(_repository.Products);
-        Assert.Equal([product.Id], _cache.Removed);
-    }
-
-    [Fact]
-    public async Task Delete_of_missing_product_does_not_touch_cache()
-    {
-        Assert.False(await _service.DeleteAsync(Guid.NewGuid(), Ct));
-        Assert.Empty(_cache.Removed);
-    }
+    // Usuwanie produktów wyłączone (decyzja biznesowa) - kod zakomentowany, nie usunięty
+    // [Fact]
+    // public async Task Delete_removes_product_and_its_cache_entry()
+    // {
+    //     var product = _repository.Add();
+    //     await _cache.SetAsync(product);
+    //
+    //     Assert.True(await _service.DeleteAsync(product.Id, Ct));
+    //     Assert.Empty(_repository.Products);
+    //     Assert.Equal([product.Id], _cache.Removed);
+    // }
+    //
+    // [Fact]
+    // public async Task Delete_of_missing_product_does_not_touch_cache()
+    // {
+    //     Assert.False(await _service.DeleteAsync(Guid.NewGuid(), Ct));
+    //     Assert.Empty(_cache.Removed);
+    // }
 
     private ProductService CreateService(FakeProductCache cache) =>
         new(_repository, cache, new CurrencyCatalog(new FakeCurrencyRepository(), TimeProvider.System));

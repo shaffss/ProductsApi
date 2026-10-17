@@ -1,7 +1,7 @@
 ---
 type: Flow
-title: Lista, usuwanie i grid produktów
-description: "GET /api/products ze stronicowaniem skip/take, DELETE /api/products/{id} w jednej transakcji z czyszczeniem cache oraz statyczny frontend (grid) pod /."
+title: Lista i grid produktów
+description: "GET /api/products ze stronicowaniem skip/take i statyczny frontend (grid) pod /; usuwanie produktów wyłączone (DELETE zwraca 405), kod zakomentowany."
 resource: ../../../src/Products.Api/wwwroot/app.js
 tags: [api, frontend, paging]
 generated: { by: claude-code/claude-opus-5-5, at: 2026-10-16T09:45:00Z }
@@ -17,13 +17,15 @@ generated: { by: claude-code/claude-opus-5-5, at: 2026-10-16T09:45:00Z }
    - indeks `IX_Products_CreatedAtUtc_Id` (migracja `ProductListIndex`) czytany wstecz;
    - strona przez `OFFSET`;
    - liczba wszystkich przez `COUNT`. Dapper wysyła oba zapytania jednym poleceniem, EF dwoma.
-4. **Bez cache:** lista zawsze czyta z bazy. Zmiany cen i usunięcia są widoczne od razu, bez unieważniania stron.
+4. **Bez cache:** lista zawsze czyta z bazy. Zmiany cen są widoczne od razu, bez unieważniania stron.
 5. **Stronicowanie offset (`skip`/`take`)** wybrał user, bo pozwala skoczyć do dowolnej strony. Koszt i alternatywa:
    - dalekie strony są wolniejsze, bo baza pomija `skip` wierszy - na 100 tys. produktów to kilkadziesiąt milisekund;
    - dopisane w międzyczasie produkty przesuwają strony;
    - stronicowanie po kluczu (keyset) nie ma tych wad, ale daje tylko „następna/poprzednia”.
 
-# Usuwanie
+# Usuwanie (wyłączone)
+
+Usuwanie produktów jest wyłączone w całym systemie ([decyzja](../decisions/no-product-deletion.md)). `DELETE /api/products/{id}` zwraca `405`, a grid nie ma przycisku ani skrótu Delete. Kod jest zakomentowany; poniżej opis, jak działał, na wypadek przywrócenia.
 
 1. **`DELETE /api/products/{id}`:** `204`, `404` gdy produktu nie ma, `400` gdy id nie jest GUID.
 2. **Jedna transakcja:** klucze idempotencji, historia cen i produkt. Klucze obce są bez kaskady, więc najpierw wiersze zależne:
@@ -42,8 +44,8 @@ generated: { by: claude-code/claude-opus-5-5, at: 2026-10-16T09:45:00Z }
   - po zmianie rozmiaru strony zostaje ta sama pozycja listy.
 - **Zaznaczenie i pasek akcji:**
   - wiersz zaznacza kliknięcie albo Enter/spacja, a strzałki przenoszą zaznaczenie na sąsiedni wiersz;
-  - obok „Dodaj” są przyciski „Edytuj” (ołówek, zmiana ceny) i „Usuń” (kosz), aktywne tylko przy zaznaczonym wierszu;
-  - skróty: dwuklik otwiera edycję, klawisz Delete - usuwanie;
+  - obok „Dodaj” jest przycisk „Edytuj” (ołówek, zmiana ceny), aktywny tylko przy zaznaczonym wierszu (przycisk „Usuń” z koszem jest zakomentowany);
+  - dwuklik otwiera edycję;
   - zaznaczenie zostaje po odświeżeniu, jeśli produkt jest na wczytanej stronie; nowy produkt jest od razu zaznaczony.
 - **Dodawanie:** `Idempotency-Key` generowany przy otwarciu okna, więc podwójne kliknięcie albo ponowienie po błędzie sieci nie tworzy drugiego produktu ([Idempotency-Key](../mechanisms/idempotency-key.md)).
 - **Zmiana ceny:**
@@ -53,4 +55,4 @@ generated: { by: claude-code/claude-opus-5-5, at: 2026-10-16T09:45:00Z }
 - **Motyw:** domyślnie systemowy; przycisk w nagłówku przełącza jasny i ciemny, a wybór zostaje w `localStorage`. Kolory to `light-dark()` zależne od `color-scheme`, a zapisany motyw ustawia skrypt w `<head>` przed pierwszym renderem, bez mignięcia.
 - **Bezpieczeństwo:** dane trafiają na stronę przez `textContent` (bez `innerHTML`), więc nazwy produktów nie są interpretowane jako HTML.
 
-Powiązane: [Kontrakt HTTP](../contracts/http-api.md), [Odczyt produktu](read-product.md), [Schemat bazy](../contracts/database-schema.md)
+Powiązane: [Kontrakt HTTP](../contracts/http-api.md), [Odczyt produktu](read-product.md), [Schemat bazy](../contracts/database-schema.md), [Produkty nie są usuwane](../decisions/no-product-deletion.md)

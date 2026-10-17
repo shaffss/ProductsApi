@@ -188,20 +188,21 @@ public abstract class ProductRepositoryTests(DatabaseFixture database, OrmKind o
         Assert.All(page.Items, p => Assert.Equal(DateTimeKind.Utc, p.UpdatedAtUtc.Kind));
     }
 
-    [Fact]
-    public async Task Delete_removes_product_with_price_history_and_idempotency_key()
-    {
-        var key = new IdempotencyKey { Key = $"key-{Guid.NewGuid():N}", RequestHash = new byte[32] };
-        var product = (await _repository.TryCreateAsync("Czujnik do usunięcia", 10m, "PLN", key, Ct))!;
-        await _repository.ChangePriceAsync(product.Id, 12m, "PLN", null, Ct);
-
-        Assert.True(await _repository.DeleteAsync(product.Id, Ct));
-
-        Assert.Null(await _repository.GetAsync(product.Id, Ct));
-        Assert.Empty(await _db.GetHistoryAsync(product.Id));
-        Assert.False(await _db.IdempotencyKeyExistsAsync(key.Key));
-        Assert.False(await _repository.DeleteAsync(product.Id, Ct)); // już nie istnieje
-    }
+    // Usuwanie produktów wyłączone (decyzja biznesowa) - kod zakomentowany, nie usunięty
+    // [Fact]
+    // public async Task Delete_removes_product_with_price_history_and_idempotency_key()
+    // {
+    //     var key = new IdempotencyKey { Key = $"key-{Guid.NewGuid():N}", RequestHash = new byte[32] };
+    //     var product = (await _repository.TryCreateAsync("Czujnik do usunięcia", 10m, "PLN", key, Ct))!;
+    //     await _repository.ChangePriceAsync(product.Id, 12m, "PLN", null, Ct);
+    //
+    //     Assert.True(await _repository.DeleteAsync(product.Id, Ct));
+    //
+    //     Assert.Null(await _repository.GetAsync(product.Id, Ct));
+    //     Assert.Empty(await _db.GetHistoryAsync(product.Id));
+    //     Assert.False(await _db.IdempotencyKeyExistsAsync(key.Key));
+    //     Assert.False(await _repository.DeleteAsync(product.Id, Ct)); // już nie istnieje
+    // }
 
     [Fact]
     public async Task Currencies_are_seeded_by_migration()

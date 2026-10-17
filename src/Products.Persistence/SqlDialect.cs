@@ -29,7 +29,7 @@ public sealed partial class SqlDialect
     public required string InsertProductWithKeySql { get; init; }
     public required string GetIdempotencyKeySql { get; init; }
     public required string ChangePriceSql { get; init; }
-    public required string DeleteProductSql { get; init; }
+    // public required string DeleteProductSql { get; init; } // usuwanie produktów wyłączone (decyzja biznesowa)
     public required string InsertOutboxMessageSql { get; init; }
     public required string GetActiveCurrenciesSql { get; init; }
 

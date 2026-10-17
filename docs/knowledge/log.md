@@ -1,5 +1,8 @@
 # Historia zmian
 
+## 2026-10-17
+* **Utworzenie**: decyzja [Produkty nie są usuwane](decisions/no-product-deletion.md) - usuwanie wyłączone w całym systemie, kod zakomentowany; aktualizacja [przepływu listy i gridu](flows/list-and-delete.md) i [kontraktu HTTP](contracts/http-api.md).
+
 ## 2026-10-16
 * **Aktualizacja**: grid z przełącznikiem trybu jasnego i ciemnego - [lista, usuwanie i grid](flows/list-and-delete.md).
 * **Aktualizacja**: launcher z opcją Aspire Dashboard (uruchomienie kontenera, bez niej API bez telemetrii) i linkami w statusie kontenerów (UI w przeglądarce albo adres do schowka); po starcie okno zostaje otwarte jako panel statusu, a przy API w kontenerze pozwala przebudować i uruchomić wariant ponownie - [uruchomienie lokalne](playbooks/run-locally.md).

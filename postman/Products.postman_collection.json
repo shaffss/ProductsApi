@@ -2,7 +2,7 @@
   "info": {
     "_postman_id": "5b0f3c1e-7a2d-4c1b-9e3f-2a6d8c4b1f70",
     "name": "Products API",
-    "description": "Kolekcja do weryfikacji zadania. Środowiska (folder postman/environments) wskazują 4 warianty API z docker-compose (8081-8084) albo API uruchomione lokalnie (5032).\n\nFolder **1. Scenariusz z zadania** uruchom po kolei (Run folder) - każde żądanie ma testy. Folder **2. Walidacja i błędy** pokazuje odpowiedzi 400/404. Folder **3. Idempotencja, współbieżność, health** (też po kolei): Idempotency-Key przy tworzeniu, ETag/If-Match przy zmianie ceny, /health/live i /health/ready. Folder **4. Lista i usuwanie** (po kolei): stronicowanie skip/take i DELETE.\n\nGrid z produktami (frontend): adres API w przeglądarce, np. http://localhost:8081/\n\nZdarzenie z Kafki po zmianie ceny widać w logu kontenera wariantu, np.:\n`docker logs api-efcore-postgres | findstr \"Product price changed\"`\nŚlad żądania przez outbox i Kafkę do konsumenta: Aspire Dashboard http://localhost:18888",
+    "description": "Kolekcja do weryfikacji zadania. Środowiska (folder postman/environments) wskazują 4 warianty API z docker-compose (8081-8084) albo API uruchomione lokalnie (5032).\n\nFolder **1. Scenariusz z zadania** uruchom po kolei (Run folder) - każde żądanie ma testy. Folder **2. Walidacja i błędy** pokazuje odpowiedzi 400/404. Folder **3. Idempotencja, współbieżność, health** (też po kolei): Idempotency-Key przy tworzeniu, ETag/If-Match przy zmianie ceny, /health/live i /health/ready. Folder **4. Lista (usuwanie wyłączone)**: stronicowanie skip/take; DELETE zwraca 405, bo usuwanie produktów jest wyłączone.\n\nGrid z produktami (frontend): adres API w przeglądarce, np. http://localhost:8081/\n\nZdarzenie z Kafki po zmianie ceny widać w logu kontenera wariantu, np.:\n`docker logs api-efcore-postgres | findstr \"Product price changed\"`\nŚlad żądania przez outbox i Kafkę do konsumenta: Aspire Dashboard http://localhost:18888",
     "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
   },
   "variable": [
@@ -10,8 +10,7 @@
     { "key": "productId", "value": "" },
     { "key": "missingId", "value": "00000000-0000-0000-0000-00000000dead" },
     { "key": "idempotencyKey", "value": "" },
-    { "key": "idempotentProductId", "value": "" },
-    { "key": "deleteId", "value": "" }
+    { "key": "idempotentProductId", "value": "" }
   ],
   "item": [
     {
@@ -660,7 +659,7 @@
       ]
     },
     {
-      "name": "4. Lista i usuwanie",
+      "name": "4. Lista (usuwanie wyłączone)",
       "item": [
         {
           "name": "4.1 Lista - pierwsza strona",
@@ -719,80 +718,24 @@
           }
         },
         {
-          "name": "4.3 Utwórz produkt do usunięcia",
+          "name": "4.3 Usuwanie wyłączone (405)",
           "event": [
             {
               "listen": "test",
               "script": {
                 "type": "text/javascript",
                 "exec": [
-                  "pm.test('201 Created', () => pm.response.to.have.status(201));",
-                  "pm.collectionVariables.set('deleteId', pm.response.json().id);"
+                  "pm.test('405 Method Not Allowed', () => pm.response.to.have.status(405));",
+                  "pm.test('Allow bez DELETE', () => pm.expect(pm.response.headers.get('Allow')).to.not.include('DELETE'));"
                 ]
               }
             }
           ],
           "request": {
-            "method": "POST",
-            "header": [{ "key": "Content-Type", "value": "application/json" }],
-            "body": {
-              "mode": "raw",
-              "raw": "{\n  \"name\": \"Czujnik do usunięcia\",\n  \"price\": 99.00,\n  \"currency\": \"PLN\"\n}",
-              "options": { "raw": { "language": "json" } }
-            },
-            "url": { "raw": "{{baseUrl}}/api/products", "host": ["{{baseUrl}}"], "path": ["api", "products"] }
-          }
-        },
-        {
-          "name": "4.4 Usuń produkt",
-          "event": [
-            {
-              "listen": "test",
-              "script": {
-                "type": "text/javascript",
-                "exec": ["pm.test('204 No Content', () => pm.response.to.have.status(204));"]
-              }
-            }
-          ],
-          "request": {
             "method": "DELETE",
             "header": [],
-            "url": { "raw": "{{baseUrl}}/api/products/{{deleteId}}", "host": ["{{baseUrl}}"], "path": ["api", "products", "{{deleteId}}"] },
-            "description": "Usuwa produkt z historią cen i kluczami idempotencji (jedna transakcja) i czyści wpis w Redisie."
-          }
-        },
-        {
-          "name": "4.5 Pobierz usunięty (404)",
-          "event": [
-            {
-              "listen": "test",
-              "script": {
-                "type": "text/javascript",
-                "exec": ["pm.test('404 Not Found - także z cache', () => pm.response.to.have.status(404));"]
-              }
-            }
-          ],
-          "request": {
-            "method": "GET",
-            "header": [],
-            "url": { "raw": "{{baseUrl}}/api/products/{{deleteId}}", "host": ["{{baseUrl}}"], "path": ["api", "products", "{{deleteId}}"] }
-          }
-        },
-        {
-          "name": "4.6 Usuń ponownie (404)",
-          "event": [
-            {
-              "listen": "test",
-              "script": {
-                "type": "text/javascript",
-                "exec": ["pm.test('404 Not Found', () => pm.response.to.have.status(404));"]
-              }
-            }
-          ],
-          "request": {
-            "method": "DELETE",
-            "header": [],
-            "url": { "raw": "{{baseUrl}}/api/products/{{deleteId}}", "host": ["{{baseUrl}}"], "path": ["api", "products", "{{deleteId}}"] }
+            "url": { "raw": "{{baseUrl}}/api/products/{{missingId}}", "host": ["{{baseUrl}}"], "path": ["api", "products", "{{missingId}}"] },
+            "description": "Usuwanie produktów jest wyłączone (decyzja biznesowa) - API nie ma endpointu DELETE."
           }
         }
       ]

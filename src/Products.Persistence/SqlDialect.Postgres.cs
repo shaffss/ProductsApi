@@ -87,17 +87,18 @@ public sealed partial class SqlDialect
             WHERE "Id" = @id AND NOT EXISTS (SELECT 1 FROM changed)
             """,
 
-        // Jedno polecenie (atomowe): klucze idempotencji, historia i produkt. Klucze obce bez kaskady
-        // sprawdzane są na końcu polecenia, gdy wiersze zależne są już usunięte. Brak wiersza = brak produktu.
-        DeleteProductSql = """
-            WITH keys AS (
-                DELETE FROM "IdempotencyKeys" WHERE "ProductId" = @id
-            ), history AS (
-                DELETE FROM "ProductPriceHistory" WHERE "ProductId" = @id
-            )
-            DELETE FROM "Products" WHERE "Id" = @id
-            RETURNING "Id"
-            """,
+        // Usuwanie produktów wyłączone (decyzja biznesowa) - kod zakomentowany, nie usunięty
+        // // Jedno polecenie (atomowe): klucze idempotencji, historia i produkt. Klucze obce bez kaskady
+        // // sprawdzane są na końcu polecenia, gdy wiersze zależne są już usunięte. Brak wiersza = brak produktu.
+        // DeleteProductSql = """
+        //     WITH keys AS (
+        //         DELETE FROM "IdempotencyKeys" WHERE "ProductId" = @id
+        //     ), history AS (
+        //         DELETE FROM "ProductPriceHistory" WHERE "ProductId" = @id
+        //     )
+        //     DELETE FROM "Products" WHERE "Id" = @id
+        //     RETURNING "Id"
+        //     """,
 
         InsertOutboxMessageSql = """
             INSERT INTO "OutboxMessages" ("Type", "Topic", "MessageKey", "Payload", "TraceParent", "OccurredAtUtc")

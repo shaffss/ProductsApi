@@ -90,13 +90,14 @@ internal sealed class DapperProductRepository(DbDataSource dataSource, SqlDialec
         return update;
     }, ct);
 
-    public Task<bool> DeleteAsync(Guid id, CancellationToken ct) => DbRetry.ExecuteAsync(async ct =>
-    {
-        await using var connection = await dataSource.OpenConnectionAsync(ct);
-        await using var transaction = await connection.BeginTransactionAsync(ct);
-        var deleted = await connection.QueryFirstOrDefaultAsync<Guid?>(new CommandDefinition(
-            sql.DeleteProductSql, new DbParameters(sql.GetProductParameters(id)), transaction, cancellationToken: ct));
-        await transaction.CommitAsync(ct);
-        return deleted is not null;
-    }, ct);
+    // Usuwanie produktów wyłączone (decyzja biznesowa) - kod zakomentowany, nie usunięty
+    // public Task<bool> DeleteAsync(Guid id, CancellationToken ct) => DbRetry.ExecuteAsync(async ct =>
+    // {
+    //     await using var connection = await dataSource.OpenConnectionAsync(ct);
+    //     await using var transaction = await connection.BeginTransactionAsync(ct);
+    //     var deleted = await connection.QueryFirstOrDefaultAsync<Guid?>(new CommandDefinition(
+    //         sql.DeleteProductSql, new DbParameters(sql.GetProductParameters(id)), transaction, cancellationToken: ct));
+    //     await transaction.CommitAsync(ct);
+    //     return deleted is not null;
+    // }, ct);
 }

@@ -13,7 +13,7 @@ Dla recenzenta zadania punktem wejścia jest [README](../../README.md).
 * [Zmiana ceny](flows/change-price.md) - główny scenariusz zadania: od PUT przez outbox i Kafkę do logu konsumenta.
 * [Odczyt produktu](flows/read-product.md) - cache-aside w Redisie.
 * [Utworzenie produktu](flows/create-product.md) - walidacja i opcjonalny klucz idempotencji.
-* [Lista, usuwanie i grid](flows/list-and-delete.md) - stronicowanie skip/take, DELETE i frontend pod `/`.
+* [Lista i grid](flows/list-and-delete.md) - stronicowanie skip/take i frontend pod `/`; usuwanie produktów [wyłączone](decisions/no-product-deletion.md).
 
 # Katalogi
 

@@ -90,7 +90,8 @@ internal sealed class FakeProductRepository : IProductRepository
 
     public (int Skip, int Take)? LastListRequest { get; private set; }
 
-    public Task<bool> DeleteAsync(Guid id, CancellationToken ct) => Task.FromResult(Products.Remove(id));
+    // Usuwanie produktów wyłączone (decyzja biznesowa) - kod zakomentowany, nie usunięty
+    // public Task<bool> DeleteAsync(Guid id, CancellationToken ct) => Task.FromResult(Products.Remove(id));
 }
 
 internal sealed class FakeProductCache : IProductCache

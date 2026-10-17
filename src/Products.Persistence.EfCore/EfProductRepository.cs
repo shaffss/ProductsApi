@@ -93,18 +93,19 @@ internal sealed class EfProductRepository(IDbContextFactory<ProductsDbContext> f
         }, ct);
     }
 
-    // Klucze obce bez kaskady - najpierw wiersze zależne; ExecuteDelete bez wczytywania encji
-    public async Task<bool> DeleteAsync(Guid id, CancellationToken ct)
-    {
-        await using var db = await factory.CreateDbContextAsync(ct);
-        return await db.Database.CreateExecutionStrategy().ExecuteAsync(async ct =>
-        {
-            await using var transaction = await db.Database.BeginTransactionAsync(ct);
-            await db.IdempotencyKeys.Where(k => k.ProductId == id).ExecuteDeleteAsync(ct);
-            await db.ProductPriceHistory.Where(h => h.ProductId == id).ExecuteDeleteAsync(ct);
-            var deleted = await db.Products.Where(p => p.Id == id).ExecuteDeleteAsync(ct);
-            await transaction.CommitAsync(ct);
-            return deleted > 0;
-        }, ct);
-    }
+    // Usuwanie produktów wyłączone (decyzja biznesowa) - kod zakomentowany, nie usunięty
+    // // Klucze obce bez kaskady - najpierw wiersze zależne; ExecuteDelete bez wczytywania encji
+    // public async Task<bool> DeleteAsync(Guid id, CancellationToken ct)
+    // {
+    //     await using var db = await factory.CreateDbContextAsync(ct);
+    //     return await db.Database.CreateExecutionStrategy().ExecuteAsync(async ct =>
+    //     {
+    //         await using var transaction = await db.Database.BeginTransactionAsync(ct);
+    //         await db.IdempotencyKeys.Where(k => k.ProductId == id).ExecuteDeleteAsync(ct);
+    //         await db.ProductPriceHistory.Where(h => h.ProductId == id).ExecuteDeleteAsync(ct);
+    //         var deleted = await db.Products.Where(p => p.Id == id).ExecuteDeleteAsync(ct);
+    //         await transaction.CommitAsync(ct);
+    //         return deleted > 0;
+    //     }, ct);
+    // }
 }

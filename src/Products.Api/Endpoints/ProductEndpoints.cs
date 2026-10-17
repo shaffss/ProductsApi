@@ -45,11 +45,13 @@ public static class ProductEndpoints
             .ProducesProblem(StatusCodes.Status404NotFound)
             .ProducesProblem(StatusCodes.Status412PreconditionFailed);
 
-        products.MapDelete("/{id}", Delete)
-            .WithSummary("Delete a product")
-            .WithDescription("Deletes the product with its price history and idempotency keys (one transaction) "
-                + "and removes it from the cache.")
-            .ProducesProblem(StatusCodes.Status404NotFound);
+        // Usuwanie produktów wyłączone (decyzja biznesowa, docs/knowledge/decisions/no-product-deletion.md) -
+        // kod zakomentowany, nie usunięty. DELETE /api/products/{id} zwraca 405.
+        // products.MapDelete("/{id}", Delete)
+        //     .WithSummary("Delete a product")
+        //     .WithDescription("Deletes the product with its price history and idempotency keys (one transaction) "
+        //         + "and removes it from the cache.")
+        //     .ProducesProblem(StatusCodes.Status404NotFound);
 
         return app;
     }
@@ -139,15 +141,16 @@ public static class ProductEndpoints
         };
     }
 
-    private static async Task<Results<NoContent, ValidationProblem, ProblemHttpResult>> Delete(
-        string id, ProductService service, CancellationToken ct)
-    {
-        if (!Guid.TryParse(id, out var productId))
-            return InvalidId();
-        if (!await service.DeleteAsync(productId, ct))
-            return ProductNotFound(productId);
-        return TypedResults.NoContent();
-    }
+    // Usuwanie produktów wyłączone (decyzja biznesowa) - kod zakomentowany, nie usunięty
+    // private static async Task<Results<NoContent, ValidationProblem, ProblemHttpResult>> Delete(
+    //     string id, ProductService service, CancellationToken ct)
+    // {
+    //     if (!Guid.TryParse(id, out var productId))
+    //         return InvalidId();
+    //     if (!await service.DeleteAsync(productId, ct))
+    //         return ProductNotFound(productId);
+    //     return TypedResults.NoContent();
+    // }
 
     // ETag = wersja produktu (zwiększana przy każdej zmianie) - do warunkowej zmiany ceny (If-Match)
     private static string ETag(Product product) => $"\"{product.Version}\"";

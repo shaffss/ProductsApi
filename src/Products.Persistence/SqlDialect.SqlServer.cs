@@ -92,13 +92,14 @@ public sealed partial class SqlDialect
             WHERE p.Id = @id;
             """,
 
-        // W transakcji wywołującego (klucze obce bez kaskady): klucze idempotencji, historia i produkt.
-        // Brak wiersza = brak produktu.
-        DeleteProductSql = """
-            DELETE dbo.IdempotencyKeys WHERE ProductId = @id;
-            DELETE dbo.ProductPriceHistory WHERE ProductId = @id;
-            DELETE dbo.Products OUTPUT deleted.Id WHERE Id = @id;
-            """,
+        // Usuwanie produktów wyłączone (decyzja biznesowa) - kod zakomentowany, nie usunięty
+        // // W transakcji wywołującego (klucze obce bez kaskady): klucze idempotencji, historia i produkt.
+        // // Brak wiersza = brak produktu.
+        // DeleteProductSql = """
+        //     DELETE dbo.IdempotencyKeys WHERE ProductId = @id;
+        //     DELETE dbo.ProductPriceHistory WHERE ProductId = @id;
+        //     DELETE dbo.Products OUTPUT deleted.Id WHERE Id = @id;
+        //     """,
 
         InsertOutboxMessageSql = """
             INSERT dbo.OutboxMessages (Type, Topic, MessageKey, Payload, TraceParent, OccurredAtUtc)

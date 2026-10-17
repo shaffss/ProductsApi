@@ -3,6 +3,10 @@
 * [Cztery warianty dostępu do danych](four-variants.md) - EF Core albo Dapper, każdy dla PostgreSQL albo SQL Server, wybierane konfiguracją; reszta kodu wspólna, żeby benchmarki porównywały tylko ORM i bazę.
 * [Uczciwe porównanie wariantów](fair-comparison.md) - Warianty różnią się tylko ORM i bazą: ten sam SQL zmiany ceny, te same sterowniki i typy parametrów, bez narzutów fałszujących pomiary.
 
+# Zasady biznesowe
+
+* [Produkty nie są usuwane](no-product-deletion.md) - Usuwanie produktów jest wyłączone w całym systemie (decyzja biznesowa) - kod zakomentowany, a DELETE /api/products/{id} zwraca 405.
+
 # Baza danych
 
 * [Migracje EF jako źródło prawdy schematu](migrations-source-of-truth.md) - Schemat obu baz pochodzi z migracji EF Core; skrypty w db/ dają ten sam schemat i historię migracji (test), więc API może zakładać schemat jedną albo drugą drogą.

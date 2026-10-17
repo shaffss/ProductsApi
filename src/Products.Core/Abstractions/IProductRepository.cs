@@ -23,6 +23,7 @@ public interface IProductRepository
     // (PriceUpdate.Changed == false). null = produkt nie istnieje
     Task<PriceUpdate?> ChangePriceAsync(Guid id, decimal price, string currency, int? expectedVersion, CancellationToken ct);
 
-    // Jedna transakcja: produkt z historią cen i kluczami idempotencji; false - produkt nie istnieje
-    Task<bool> DeleteAsync(Guid id, CancellationToken ct);
+    // Usuwanie produktów wyłączone (decyzja biznesowa) - kod zakomentowany, nie usunięty
+    // // Jedna transakcja: produkt z historią cen i kluczami idempotencji; false - produkt nie istnieje
+    // Task<bool> DeleteAsync(Guid id, CancellationToken ct);
 }

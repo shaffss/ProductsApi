@@ -125,7 +125,7 @@ public sealed class ApiEndToEndTests(SqlServerFixture sqlServer, PostgresFixture
 
     [Theory]
     [MemberData(nameof(Variants))]
-    public async Task List_pages_newest_first_and_delete_removes_product_and_cache_entry(OrmKind orm, DatabaseEngine engine)
+    public async Task List_pages_newest_first_and_delete_is_disabled(OrmKind orm, DatabaseEngine engine)
     {
         await using var factory = await CreateFactoryAsync(orm, engine);
         var client = factory.CreateClient();
@@ -145,15 +145,23 @@ public sealed class ApiEndToEndTests(SqlServerFixture sqlServer, PostgresFixture
         using (var invalid = await client.GetAsync("/api/products?take=0", Ct))
             Assert.Equal(HttpStatusCode.BadRequest, invalid.StatusCode);
 
-        // usunięcie czyści też Redis - kolejny odczyt to 404 z bazy, a nie produkt z cache
+        // usuwanie produktów wyłączone (decyzja biznesowa): DELETE to 405, a produkt zostaje
         var id = created[0].Id;
-        Assert.Equal("MISS", await GetCacheStatusAsync(client, id));
-        using (var deleted = await client.DeleteAsync($"/api/products/{id}", Ct))
-            Assert.Equal(HttpStatusCode.NoContent, deleted.StatusCode);
+        using (var delete = await client.DeleteAsync($"/api/products/{id}", Ct))
+            Assert.Equal(HttpStatusCode.MethodNotAllowed, delete.StatusCode);
         using (var get = await client.GetAsync($"/api/products/{id}", Ct))
-            Assert.Equal(HttpStatusCode.NotFound, get.StatusCode);
-        using (var again = await client.DeleteAsync($"/api/products/{id}", Ct))
-            Assert.Equal(HttpStatusCode.NotFound, again.StatusCode);
+            Assert.Equal(HttpStatusCode.OK, get.StatusCode);
+
+        // Usuwanie produktów wyłączone (decyzja biznesowa) - kod zakomentowany, nie usunięty
+        // // usunięcie czyści też Redis - kolejny odczyt to 404 z bazy, a nie produkt z cache
+        // var id = created[0].Id;
+        // Assert.Equal("MISS", await GetCacheStatusAsync(client, id));
+        // using (var deleted = await client.DeleteAsync($"/api/products/{id}", Ct))
+        //     Assert.Equal(HttpStatusCode.NoContent, deleted.StatusCode);
+        // using (var get = await client.GetAsync($"/api/products/{id}", Ct))
+        //     Assert.Equal(HttpStatusCode.NotFound, get.StatusCode);
+        // using (var again = await client.DeleteAsync($"/api/products/{id}", Ct))
+        //     Assert.Equal(HttpStatusCode.NotFound, again.StatusCode);
 
         // frontend z wwwroot pod /
         using var page = await client.GetAsync("/", Ct);

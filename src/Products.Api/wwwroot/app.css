@@ -30,8 +30,10 @@ button { padding: 6px 14px; border: 1px solid var(--border); border-radius: 6px;
 button:hover:not(:disabled) { border-color: var(--accent); }
 button:disabled { opacity: .45; cursor: default; }
 button.primary { background: var(--accent); border-color: var(--accent); color: var(--accent-text); }
+/* usuwanie wyłączone (decyzja biznesowa) - kod zakomentowany, nie usunięty
 button.danger { background: var(--danger); border-color: var(--danger); color: #fff; }
 button.danger-outline:not(:disabled) { color: var(--danger); border-color: var(--danger); }
+*/
 button.icon { display: inline-flex; align-items: center; gap: 6px; }
 button svg { width: 16px; height: 16px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
 select, input { padding: 6px 8px; border: 1px solid var(--border); border-radius: 6px; background: var(--panel); }

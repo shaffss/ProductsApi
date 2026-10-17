@@ -105,14 +105,15 @@ public sealed class ProductService(IProductRepository repository, IProductCache 
         return update;
     }
 
-    // false - produkt nie istnieje. Cache czyszczony po zatwierdzeniu w bazie, jak przy zmianie ceny.
-    public async Task<bool> DeleteAsync(Guid id, CancellationToken ct)
-    {
-        var deleted = await repository.DeleteAsync(id, ct);
-        if (deleted)
-            await cache.TryRemoveAsync(id);
-        return deleted;
-    }
+    // Usuwanie produktów wyłączone (decyzja biznesowa) - kod zakomentowany, nie usunięty
+    // // false - produkt nie istnieje. Cache czyszczony po zatwierdzeniu w bazie, jak przy zmianie ceny.
+    // public async Task<bool> DeleteAsync(Guid id, CancellationToken ct)
+    // {
+    //     var deleted = await repository.DeleteAsync(id, ct);
+    //     if (deleted)
+    //         await cache.TryRemoveAsync(id);
+    //     return deleted;
+    // }
 
     // Wynik współdzielony przez czekające żądania - bez ich CancellationToken: anulowanie jednego nie przerywa reszty
     private async Task<Product?> LoadAsync(Guid id)

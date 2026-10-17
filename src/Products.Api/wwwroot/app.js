@@ -1,4 +1,5 @@
-// Grid produktów: lista ze stronicowaniem (skip/take), dodawanie, zmiana ceny (If-Match) i usuwanie.
+// Grid produktów: lista ze stronicowaniem (skip/take), dodawanie i zmiana ceny (If-Match).
+// Usuwanie produktów wyłączone (decyzja biznesowa) - kod zakomentowany, nie usunięty.
 // Dane trafiają do strony przez textContent (bez innerHTML), więc nazwy produktów nie są interpretowane jako HTML.
 const api = '/api/products';
 const pageSizes = [10, 20, 50, 100];
@@ -59,7 +60,7 @@ async function load() {
   }
 }
 
-// Wiersz zaznacza kliknięcie albo Enter/spacja; dwuklik - edycja, Delete - usuwanie, strzałki - sąsiedni wiersz
+// Wiersz zaznacza kliknięcie albo Enter/spacja; dwuklik - edycja, strzałki - sąsiedni wiersz
 function row(product) {
   const tr = el('tr', { tabIndex: 0, title: 'Kliknij, aby zaznaczyć; dwuklik - zmiana ceny' },
     el('td', { className: 'name' }, product.name, el('small', { textContent: product.id })),
@@ -76,9 +77,10 @@ function row(product) {
       next.click();
     } else if (event.key === 'Enter' || event.key === ' ') {
       select(product);
-    } else if (event.key === 'Delete') {
-      select(product);
-      remove(product);
+    // usuwanie wyłączone (decyzja biznesowa) - kod zakomentowany, nie usunięty
+    // } else if (event.key === 'Delete') {
+    //   select(product);
+    //   remove(product);
     } else {
       return;
     }
@@ -93,14 +95,15 @@ function row(product) {
 
 const emptyRow = () => el('tr', {}, el('td', { className: 'empty', colSpan: 4, textContent: 'Brak produktów.' }));
 
-// Zaznaczony produkt - na nim działają przyciski edycji i usuwania obok „Dodaj”
+// Zaznaczony produkt - na nim działa przycisk edycji obok „Dodaj”
 function select(product) {
   state.selected = product;
   for (const tr of $('rows').rows) {
     if (tr.dataset.id)
       tr.setAttribute('aria-selected', String(tr.dataset.id === product?.id));
   }
-  $('edit').disabled = $('delete').disabled = !product;
+  $('edit').disabled = !product;
+  // $('delete').disabled = !product; // usuwanie wyłączone (decyzja biznesowa)
 }
 
 function renderPager() {
@@ -237,25 +240,25 @@ async function editPrice(id) {
     });
 }
 
-// --- usuwanie ---
+// --- usuwanie: wyłączone (decyzja biznesowa) - kod zakomentowany, nie usunięty ---
 
-function confirmDelete(name) {
-  const dialog = $('delete-dialog');
-  $('delete-name').textContent = name;
-  dialog.returnValue = '';
-  dialog.showModal();
-  return new Promise((resolve) => dialog.addEventListener('close', () => resolve(dialog.returnValue === 'delete'), { once: true }));
-}
-
-async function remove(product) {
-  if (!await confirmDelete(product.name))
-    return;
-  const { response, body } = await request(`${api}/${product.id}`, { method: 'DELETE' });
-  if (!response.ok)
-    return notFoundOrError(response, body);
-  toast(`Usunięto: ${product.name}`);
-  await load();
-}
+// function confirmDelete(name) {
+//   const dialog = $('delete-dialog');
+//   $('delete-name').textContent = name;
+//   dialog.returnValue = '';
+//   dialog.showModal();
+//   return new Promise((resolve) => dialog.addEventListener('close', () => resolve(dialog.returnValue === 'delete'), { once: true }));
+// }
+//
+// async function remove(product) {
+//   if (!await confirmDelete(product.name))
+//     return;
+//   const { response, body } = await request(`${api}/${product.id}`, { method: 'DELETE' });
+//   if (!response.ok)
+//     return notFoundOrError(response, body);
+//   toast(`Usunięto: ${product.name}`);
+//   await load();
+// }
 
 async function notFoundOrError(response, body) {
   if (response.status !== 404)
@@ -318,7 +321,7 @@ $('take').addEventListener('change', () => {
 $('go').addEventListener('change', () => goTo(Number($('go').value)));
 $('add').addEventListener('click', create);
 $('edit').addEventListener('click', () => editPrice(state.selected.id));
-$('delete').addEventListener('click', () => remove(state.selected));
+// $('delete').addEventListener('click', () => remove(state.selected)); // usuwanie wyłączone (decyzja biznesowa)
 $('refresh').addEventListener('click', load);
 $('theme').addEventListener('click', toggleTheme);
 darkSystem.addEventListener('change', renderThemeButton);
