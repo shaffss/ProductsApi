@@ -2,9 +2,11 @@ using System.Diagnostics;
 
 namespace Products.Api.DevLauncher;
 
-// Profil "Launcher" (argument --launcher): okno wyboru wariantu przed startem API - tylko deweloperskie, tylko Windows.
-// Okno to osobny proces (launcher.ps1), więc debugger Visual Studio zostaje podpięty do API. Po starcie zostaje
-// otwarte jako panel statusu kontenerów i zamyka się razem z API (dostaje jego PID).
+// Profil "Launcher" (argument --launcher): wybór wariantu przed startem API - tylko deweloperskie.
+// Osobny proces, więc debugger IDE zostaje podpięty do API:
+// - Windows: okno launcher.ps1 (WinForms); po starcie zostaje otwarte jako panel statusu kontenerów i zamyka się
+//   razem z API (dostaje jego PID);
+// - Linux: menu launcher.sh w terminalu (whiptail), kończy pracę po starcie.
 internal static class DevLauncher
 {
     private const string Flag = "--launcher";
@@ -13,17 +15,18 @@ internal static class DevLauncher
     {
         if (!args.Contains(Flag))
             return args;
-        if (!OperatingSystem.IsWindows())
-            throw new PlatformNotSupportedException("Okno wyboru wariantu (--launcher) działa tylko na Windows.");
 
-        var script = Path.Combine(AppContext.BaseDirectory, "DevLauncher", "launcher.ps1");
-        using var dialog = Process.Start(new ProcessStartInfo(
-            "powershell.exe", $"-NoProfile -ExecutionPolicy Bypass -STA -File \"{script}\" -ParentProcessId {Environment.ProcessId}")
-        {
-            RedirectStandardOutput = true,
-            UseShellExecute = false,
-            CreateNoWindow = true,
-        })!;
+        var directory = Path.Combine(AppContext.BaseDirectory, "DevLauncher");
+        var start = OperatingSystem.IsWindows()
+            ? new ProcessStartInfo("powershell.exe",
+                $"-NoProfile -ExecutionPolicy Bypass -STA -File \"{Path.Combine(directory, "launcher.ps1")}\" -ParentProcessId {Environment.ProcessId}")
+            : OperatingSystem.IsLinux()
+                ? new ProcessStartInfo("bash", [Path.Combine(directory, "launcher.sh")])
+                : throw new PlatformNotSupportedException("Wybór wariantu (--launcher) działa na Windows i Linuksie.");
+        start.RedirectStandardOutput = true; // tylko wynik; menu na Linuksie korzysta z terminala (wejście i /dev/tty)
+        start.UseShellExecute = false;
+        start.CreateNoWindow = true;
+        using var dialog = Process.Start(start)!;
 
         // wynik to linie do pustej linii - okno działa dalej; koniec wyjścia bez wyniku: okno zamknięte bez uruchomienia
         List<string> chosen = [];

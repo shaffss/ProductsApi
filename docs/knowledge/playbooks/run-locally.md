@@ -39,7 +39,7 @@ dotnet run --project src/Products.Api
 - **Warianty SQL Server:** `docker compose --profile sqlserver up -d` i `dotnet ef database update --project src/Products.Migrations.SqlServer`.
 
 - **Profile:** `EfCore-Postgres`, `EfCore-SqlServer`, `Dapper-Postgres`, `Dapper-SqlServer` - wszystkie na http://localhost:5032, VS otwiera Swaggera. Pierwszy na liście jest domyślny dla `dotnet run` bez `--launch-profile`.
-- **Profil `Launcher`** (tylko Windows) pokazuje okno wyboru ORM, bazy, Redisa, Kafki, Aspire Dashboard i schematu przy starcie (brak, migracje EF albo skrypty `db/`); ostatni wybór zapisuje w `%LOCALAPPDATA%\ProductsApi\launcher.json`.
+- **Profil `Launcher`** (Windows: okno; Linux: menu w terminalu, opisane niżej) pokazuje okno wyboru ORM, bazy, Redisa, Kafki, Aspire Dashboard i schematu przy starcie (brak, migracje EF albo skrypty `db/`); ostatni wybór zapisuje w `%LOCALAPPDATA%\ProductsApi\launcher.json`.
   - **API w kontenerze** (opcja „API”):
     - zamiast uruchamiać API z VS, launcher usuwa kontenery API innych wariantów (zawsze działa jeden), a potem `docker compose --profile <wariant> up -d --build api-<wariant>`: obraz z bieżącego kodu, baza, Redis i Kafka;
     - czeka na `/health/live` i otwiera grid w przeglądarce;
@@ -77,12 +77,32 @@ dotnet run --project src/Products.Api
     Szczegóły: [pułapka](../pitfalls/docker-desktop-bind-mount.md).
   - **Status „utknął przy starcie”:** kontener w stanie `created` to objaw zawieszonego Docker Desktop. Status pokazuje go na czerwono, a podsumowanie każe zrestartować Docker Desktop przed startem.
   - **Wynik na stdout:** argumenty dla API (albo adres API w kontenerze) zakończone pustą linią. `DevLauncher` czyta do tej linii i nie czeka na koniec procesu okna. Wyjście `docker compose` nie trafia na stdout.
-  - Musi być ostatni na liście, inaczej `dotnet run` bez profilu otwierałby okno (a na Linuksie kończył się błędem).
+  - Musi być ostatni na liście, inaczej `dotnet run` bez profilu otwierałby okno.
   - Okno to skrypt `DevLauncher/launcher.ps1` (WinForms) uruchamiany jako osobny proces. Wybór trafia do API jako argumenty `--Klucz=wartość`, więc debugger VS zostaje podpięty do API.
   - Skrypt musi mieć BOM UTF-8 (Windows PowerShell 5.1 czyta pliki bez BOM jako ANSI i psuje polskie znaki) i nie trafia do publikacji ani obrazu Dockera.
   - Profile zamiast menu w konsoli przy starcie: menu zawiesiłoby się w kontenerze i w CI.
 - **Bez profilu:** `dotnet run --project src/Products.Api -- --Persistence:Orm=Dapper --Persistence:Database=SqlServer`.
 - **Telemetria:** w Development API wysyła ją do Aspire Dashboard (`localhost:4317`), np. z `docker compose --profile postgres --profile observability up -d`. Pusty `OTEL_EXPORTER_OTLP_ENDPOINT` ją wyłącza.
+
+# Launcher na Linuksie
+
+```bash
+dotnet run --project src/Products.Api --launch-profile Launcher   # albo: dotnet run --project src/Products.Api -- --launcher
+```
+
+- **Menu w terminalu** (`DevLauncher/launcher.sh`, bash i whiptail) z tymi samymi opcjami i statusem kontenerów co okno na Windows. Wybór pozycji przełącza jej wartość, a „Uruchom” kończy wybór.
+- **Bez whiptail** (np. Fedora bez pakietu `newt`) launcher zadaje zwykłe pytania w konsoli: numer pozycji, Enter - Uruchom.
+- **Start kontenerów** działa jak na Windows, a wyjście `docker compose` widać w terminalu:
+  - kontenery wariantu z limitem czasu;
+  - baza SQL Server przez jednorazowy `sqlserver-init` (`docker compose run --rm`) - bez problemu z montowaniem plików, który dotyczy Docker Desktop na Windows;
+  - API w kontenerze: przebudowa obrazu, czekanie na `/health/live` (przez `/dev/tcp`, bez curl i wget), grid w przeglądarce przez `xdg-open`, gdy jest pulpit.
+- **Bez panelu po starcie:** terminal zajmują logi API, więc launcher kończy pracę, gdy przekaże wybór.
+- **Ostatni wybór** jest w `~/.config/ProductsApi/launcher.conf` (`XDG_CONFIG_HOME`).
+- **Wymagania:**
+  - bash 4+ i coreutils (`timeout`);
+  - Docker dostępny bez `sudo` (użytkownik w grupie `docker`) - inaczej status pokazuje „Docker nie odpowiada”;
+  - terminal: menu korzysta z `/dev/tty`, więc w IDE potrzebna jest konsola z terminalem (bez niego launcher kończy się komunikatem).
+- **Wynik dla `DevLauncher`** jak na Windows: argumenty albo adres API, zakończone pustą linią, na stdout. Menu i wyjście dockera idą na terminal.
 
 # Konfiguracja
 

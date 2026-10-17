@@ -16,7 +16,8 @@
     <ProjectReference Include="..\Products.Migrations.Postgres\Products.Migrations.Postgres.csproj" />
   </ItemGroup>
   <ItemGroup>
-    <!-- okno wyboru wariantu (profil Launcher) - tylko do uruchomień deweloperskich, poza publikacją -->
-    <None Update="DevLauncher\launcher.ps1" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="Never" />
+    <!-- wybór wariantu (profil Launcher): okno na Windows, menu w terminalu na Linuksie - tylko do uruchomień
+         deweloperskich, poza publikacją -->
+    <None Update="DevLauncher\launcher.ps1;DevLauncher\launcher.sh" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="Never" />
   </ItemGroup>
 </Project>
