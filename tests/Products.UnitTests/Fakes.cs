@@ -80,6 +80,17 @@ internal sealed class FakeProductRepository : IProductRepository
         product.Version++;
         return Task.FromResult<PriceUpdate?>(new PriceUpdate(product, oldPrice, oldCurrency));
     }
+
+    public Task<ProductPage> ListAsync(int skip, int take, CancellationToken ct)
+    {
+        LastListRequest = (skip, take);
+        var items = Products.Values.OrderByDescending(p => p.CreatedAtUtc).ThenByDescending(p => p.Id).Skip(skip).Take(take).ToList();
+        return Task.FromResult(new ProductPage(items, Products.Count, skip, take));
+    }
+
+    public (int Skip, int Take)? LastListRequest { get; private set; }
+
+    public Task<bool> DeleteAsync(Guid id, CancellationToken ct) => Task.FromResult(Products.Remove(id));
 }
 
 internal sealed class FakeProductCache : IProductCache

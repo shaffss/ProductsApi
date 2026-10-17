@@ -16,6 +16,9 @@ internal sealed class ProductConfiguration(SqlDialect sql) : IEntityTypeConfigur
         builder.Property(p => p.UpdatedAtUtc).HasDefaultValueSql(sql.UtcNowSql);
         builder.Property(p => p.Version).HasDefaultValue(1);
 
+        // lista od najnowszych (GET /api/products) - indeks czytany wstecz, Id rozstrzyga równe daty
+        builder.HasIndex(p => new { p.CreatedAtUtc, p.Id });
+
         builder.HasOne<Currency>().WithMany()
             .HasForeignKey(p => p.Currency).HasPrincipalKey(c => c.Code)
             .OnDelete(DeleteBehavior.NoAction);

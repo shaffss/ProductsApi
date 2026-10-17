@@ -14,3 +14,7 @@ CREATE TABLE IF NOT EXISTS "Products"
     CONSTRAINT "CK_Products_Name_NotEmpty" CHECK (TRIM("Name") <> ''),
     CONSTRAINT "CK_Products_Price_Positive" CHECK ("Price" > 0)
 );
+
+-- lista od najnowszych (GET /api/products) - indeks czytany wstecz, Id rozstrzyga równe daty
+CREATE INDEX IF NOT EXISTS "IX_Products_CreatedAtUtc_Id"
+    ON "Products" ("CreatedAtUtc", "Id");

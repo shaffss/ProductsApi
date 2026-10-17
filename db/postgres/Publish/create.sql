@@ -48,6 +48,10 @@ CREATE TABLE IF NOT EXISTS "Products"
     CONSTRAINT "CK_Products_Price_Positive" CHECK ("Price" > 0)
 );
 
+-- lista od najnowszych (GET /api/products) - indeks czytany wstecz, Id rozstrzyga równe daty
+CREATE INDEX IF NOT EXISTS "IX_Products_CreatedAtUtc_Id"
+    ON "Products" ("CreatedAtUtc", "Id");
+
 -- ===== 003_product_price_history.sql =====
 -- Historia zmian cen - zapisywana w tej samej transakcji co zmiana ceny
 CREATE TABLE IF NOT EXISTS "ProductPriceHistory"
@@ -140,6 +144,7 @@ CREATE TABLE IF NOT EXISTS "__EFMigrationsHistory"
 );
 
 INSERT INTO "__EFMigrationsHistory" ("MigrationId", "ProductVersion")
-VALUES ('20261015185859_InitialCreate', '10.0.13')
+VALUES ('20261015185859_InitialCreate', '10.0.13'),
+       ('20261016090107_ProductListIndex', '10.0.13')
 ON CONFLICT ("MigrationId") DO NOTHING;
 

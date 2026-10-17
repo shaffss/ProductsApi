@@ -10,5 +10,6 @@ CREATE TABLE IF NOT EXISTS "__EFMigrationsHistory"
 );
 
 INSERT INTO "__EFMigrationsHistory" ("MigrationId", "ProductVersion")
-VALUES ('20261015185859_InitialCreate', '10.0.13')
+VALUES ('20261015185859_InitialCreate', '10.0.13'),
+       ('20261016090107_ProductListIndex', '10.0.13')
 ON CONFLICT ("MigrationId") DO NOTHING;

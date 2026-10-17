@@ -12,6 +12,8 @@ public sealed class ProductService(IProductRepository repository, IProductCache 
     public const int NameMaxLength = 200;
     public const decimal MaxPrice = 9_999_999_999_999_999.99m; // decimal(18,2)
     public const int IdempotencyKeyMaxLength = 100;
+    public const int DefaultPageSize = 20;
+    public const int MaxPageSize = 100;
 
     private static readonly KeyValuePair<string, object?> CacheHit = new("cache.result", "hit");
     private static readonly KeyValuePair<string, object?> CacheMiss = new("cache.result", "miss");
@@ -36,6 +38,20 @@ public sealed class ProductService(IProductRepository repository, IProductCache 
         ProductsTelemetry.CacheLookups.Add(1, CacheMiss);
         var load = _loads.GetOrAdd(id, static (id, service) => new(() => service.LoadAsync(id)), this);
         return new(await load.Value.WaitAsync(ct), FromCache: false);
+    }
+
+    // Stronicowanie skip/take (offset) - prosto i ze skokiem do dowolnej strony; lista bez cache
+    public async Task<Result<ProductPage>> ListAsync(int? skip, int? take, CancellationToken ct)
+    {
+        Dictionary<string, string[]>? errors = null;
+        if (skip < 0)
+            AddError(ref errors, "skip", "Skip must not be negative.");
+        if (take is < 1 or > MaxPageSize)
+            AddError(ref errors, "take", $"Take must be between 1 and {MaxPageSize}.");
+
+        if (errors is not null)
+            return Result<ProductPage>.Invalid(errors);
+        return await repository.ListAsync(skip ?? 0, take ?? DefaultPageSize, ct);
     }
 
     // Value == null bez błędów: klucz idempotencji był już użyty z inną treścią żądania
@@ -87,6 +103,15 @@ public sealed class ProductService(IProductRepository repository, IProductCache 
         if (update is { Changed: true })
             await cache.TryRemoveAsync(id);
         return update;
+    }
+
+    // false - produkt nie istnieje. Cache czyszczony po zatwierdzeniu w bazie, jak przy zmianie ceny.
+    public async Task<bool> DeleteAsync(Guid id, CancellationToken ct)
+    {
+        var deleted = await repository.DeleteAsync(id, ct);
+        if (deleted)
+            await cache.TryRemoveAsync(id);
+        return deleted;
     }
 
     // Wynik współdzielony przez czekające żądania - bez ich CancellationToken: anulowanie jednego nie przerywa reszty

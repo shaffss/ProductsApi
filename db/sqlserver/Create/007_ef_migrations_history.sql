@@ -14,6 +14,7 @@ GO
 
 INSERT dbo.__EFMigrationsHistory (MigrationId, ProductVersion)
 SELECT s.MigrationId, s.ProductVersion
-FROM (VALUES (N'20261015185853_InitialCreate', N'10.0.13')) AS s (MigrationId, ProductVersion)
+FROM (VALUES (N'20261015185853_InitialCreate', N'10.0.13'),
+             (N'20261016090102_ProductListIndex', N'10.0.13')) AS s (MigrationId, ProductVersion)
 WHERE NOT EXISTS (SELECT 1 FROM dbo.__EFMigrationsHistory h WHERE h.MigrationId = s.MigrationId);
 GO

@@ -1,6 +1,8 @@
 # Historia zmian
 
 ## 2026-10-16
+* **Aktualizacja**: grid z przełącznikiem trybu jasnego i ciemnego - [lista, usuwanie i grid](flows/list-and-delete.md).
+* **Utworzenie**: [lista, usuwanie i grid produktów](flows/list-and-delete.md) - GET ze stronicowaniem skip/take, DELETE, frontend pod `/`; aktualizacja [kontraktu HTTP](contracts/http-api.md), [schematu bazy](contracts/database-schema.md) (indeks listy) i [decyzji o migracjach](decisions/migrations-source-of-truth.md) (druga migracja).
 * **Aktualizacja**: launcher uruchamia kontenery wybranego wariantu ([uruchomienie lokalne](playbooks/run-locally.md)).
 * **Aktualizacja**: schemat przy starcie z migracji EF albo ze skryptów `db/` (`Database:Schema`), zamienne na jednej bazie dzięki historii migracji w skryptach i pilnowane testem - [decyzja](decisions/migrations-source-of-truth.md), [zmiana schematu](playbooks/schema-change.md), [schemat bazy](contracts/database-schema.md), [uruchomienie lokalne](playbooks/run-locally.md).
 * **Aktualizacja**: Compose uruchamia minimum jednego wariantu (profile), bez polityki restartu - [uruchomienie lokalne](playbooks/run-locally.md), [benchmarki](playbooks/run-benchmarks.md), [cztery warianty](decisions/four-variants.md); nowa pułapka [down a profile](pitfalls/compose-down-profiles.md).

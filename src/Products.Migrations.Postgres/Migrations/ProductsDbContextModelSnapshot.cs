@@ -218,6 +218,8 @@ namespace Products.Migrations.Postgres.Migrations
 
                     b.HasKey("Id");
 
+                    b.HasIndex("CreatedAtUtc", "Id");
+
                     b.ToTable("Products", t =>
                         {
                             t.HasCheckConstraint("CK_Products_Name_NotEmpty", "TRIM(\"Name\") <> ''");

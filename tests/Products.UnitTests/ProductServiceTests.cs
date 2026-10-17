@@ -207,6 +207,48 @@ public sealed class ProductServiceTests
         Assert.Empty(_cache.Entries);
     }
 
+    [Fact]
+    public async Task List_without_paging_returns_first_page_of_default_size()
+    {
+        _repository.Add();
+
+        var result = await _service.ListAsync(null, null, Ct);
+
+        Assert.Null(result.Errors);
+        Assert.Equal((0, ProductService.DefaultPageSize), _repository.LastListRequest);
+        Assert.Equal(1, result.Value?.Total);
+    }
+
+    [Theory]
+    [InlineData(-1, 20, "skip")]
+    [InlineData(0, 0, "take")]
+    [InlineData(0, ProductService.MaxPageSize + 1, "take")]
+    public async Task List_rejects_invalid_paging(int skip, int take, string field)
+    {
+        var result = await _service.ListAsync(skip, take, Ct);
+
+        Assert.Equal([field], result.Errors?.Keys);
+        Assert.Null(_repository.LastListRequest);
+    }
+
+    [Fact]
+    public async Task Delete_removes_product_and_its_cache_entry()
+    {
+        var product = _repository.Add();
+        await _cache.SetAsync(product);
+
+        Assert.True(await _service.DeleteAsync(product.Id, Ct));
+        Assert.Empty(_repository.Products);
+        Assert.Equal([product.Id], _cache.Removed);
+    }
+
+    [Fact]
+    public async Task Delete_of_missing_product_does_not_touch_cache()
+    {
+        Assert.False(await _service.DeleteAsync(Guid.NewGuid(), Ct));
+        Assert.Empty(_cache.Removed);
+    }
+
     private ProductService CreateService(FakeProductCache cache) =>
         new(_repository, cache, new CurrencyCatalog(new FakeCurrencyRepository(), TimeProvider.System));
 }

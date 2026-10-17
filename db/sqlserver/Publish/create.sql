@@ -1,6 +1,7 @@
 -- ===== 000_database.sql =====
 -- SQL Server: baza Products
 -- Skrypty są idempotentne - można je uruchamiać wielokrotnie, osobno lub scalone (merge_files.cmd).
+-- Te same instrukcje wykonuje usługa sqlserver-init w docker-compose.yml - przy zmianie popraw oba miejsca.
 
 IF DB_ID(N'Products') IS NULL
     CREATE DATABASE [Products];
@@ -64,6 +65,12 @@ IF OBJECT_ID(N'dbo.Products', N'U') IS NULL
         CONSTRAINT CK_Products_Name_NotEmpty CHECK (TRIM(Name) <> ''),
         CONSTRAINT CK_Products_Price_Positive CHECK (Price > 0)
     );
+GO
+
+-- lista od najnowszych (GET /api/products) - indeks czytany wstecz, Id rozstrzyga równe daty
+IF INDEXPROPERTY(OBJECT_ID(N'dbo.Products'), N'IX_Products_CreatedAtUtc_Id', N'IndexId') IS NULL
+    CREATE INDEX IX_Products_CreatedAtUtc_Id
+        ON dbo.Products (CreatedAtUtc, Id);
 GO
 
 -- ===== 003_product_price_history.sql =====
@@ -193,7 +200,8 @@ GO
 
 INSERT dbo.__EFMigrationsHistory (MigrationId, ProductVersion)
 SELECT s.MigrationId, s.ProductVersion
-FROM (VALUES (N'20261015185853_InitialCreate', N'10.0.13')) AS s (MigrationId, ProductVersion)
+FROM (VALUES (N'20261015185853_InitialCreate', N'10.0.13'),
+             (N'20261016090102_ProductListIndex', N'10.0.13')) AS s (MigrationId, ProductVersion)
 WHERE NOT EXISTS (SELECT 1 FROM dbo.__EFMigrationsHistory h WHERE h.MigrationId = s.MigrationId);
 GO
 

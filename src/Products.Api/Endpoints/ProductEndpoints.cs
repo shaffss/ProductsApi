@@ -13,6 +13,12 @@ public static class ProductEndpoints
     {
         var products = app.MapGroup("/api/products").WithTags("Products");
 
+        products.MapGet("/", List)
+            .WithSummary("List products")
+            .WithDescription("Newest first (CreatedAtUtc, then Id). Paging: skip (default 0) and take "
+                + $"(default {ProductService.DefaultPageSize}, 1-{ProductService.MaxPageSize}); total is the number of "
+                + "all products. Read from the database, without the cache.");
+
         products.MapPost("/", Create)
             .WithSummary("Create a product")
             .WithDescription("Name is required (max 200 characters). Price must be greater than zero with at most "
@@ -39,7 +45,22 @@ public static class ProductEndpoints
             .ProducesProblem(StatusCodes.Status404NotFound)
             .ProducesProblem(StatusCodes.Status412PreconditionFailed);
 
+        products.MapDelete("/{id}", Delete)
+            .WithSummary("Delete a product")
+            .WithDescription("Deletes the product with its price history and idempotency keys (one transaction) "
+                + "and removes it from the cache.")
+            .ProducesProblem(StatusCodes.Status404NotFound);
+
         return app;
+    }
+
+    private static async Task<Results<Ok<ProductListResponse>, ValidationProblem>> List(
+        int? skip, int? take, ProductService service, CancellationToken ct)
+    {
+        var result = await service.ListAsync(skip, take, ct);
+        if (result.Errors is { } errors)
+            return TypedResults.ValidationProblem(errors);
+        return TypedResults.Ok(ProductListResponse.From(result.Value!));
     }
 
     private static async Task<Results<Created<ProductResponse>, ValidationProblem, ProblemHttpResult>> Create(
@@ -116,6 +137,16 @@ public static class ProductEndpoints
                 Message = "Price and currency are unchanged - nothing was updated.",
             }),
         };
+    }
+
+    private static async Task<Results<NoContent, ValidationProblem, ProblemHttpResult>> Delete(
+        string id, ProductService service, CancellationToken ct)
+    {
+        if (!Guid.TryParse(id, out var productId))
+            return InvalidId();
+        if (!await service.DeleteAsync(productId, ct))
+            return ProductNotFound(productId);
+        return TypedResults.NoContent();
     }
 
     // ETag = wersja produktu (zwiększana przy każdej zmianie) - do warunkowej zmiany ceny (If-Match)

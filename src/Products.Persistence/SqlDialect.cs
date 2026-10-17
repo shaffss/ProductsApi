@@ -24,10 +24,12 @@ public sealed partial class SqlDialect
 
     // SQL (Dapper; ChangePriceSql także EF)
     public required string GetProductSql { get; init; }
+    public required string ListProductsSql { get; init; }
     public required string InsertProductSql { get; init; }
     public required string InsertProductWithKeySql { get; init; }
     public required string GetIdempotencyKeySql { get; init; }
     public required string ChangePriceSql { get; init; }
+    public required string DeleteProductSql { get; init; }
     public required string InsertOutboxMessageSql { get; init; }
     public required string GetActiveCurrenciesSql { get; init; }
 
@@ -46,6 +48,9 @@ public sealed partial class SqlDialect
     public string Quote(string identifier) => QuoteOpen + identifier + QuoteClose;
 
     public DbParameter[] GetProductParameters(Guid id) => [Parameter("id", DbType.Guid, id)];
+
+    public DbParameter[] ListProductsParameters(int skip, int take) =>
+        [Parameter("skip", DbType.Int32, skip), Parameter("take", DbType.Int32, take)];
 
     public DbParameter[] InsertProductParameters(string name, decimal price, string currency) =>
         [Parameter("name", DbType.String, name, size: 200), Price(price), Currency(currency)];

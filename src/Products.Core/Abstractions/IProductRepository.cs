@@ -6,6 +6,9 @@ public interface IProductRepository
 {
     Task<Product?> GetAsync(Guid id, CancellationToken ct);
 
+    // Strona od najnowszych (CreatedAtUtc, potem Id - kolejność jednoznaczna) i liczba wszystkich produktów
+    Task<ProductPage> ListAsync(int skip, int take, CancellationToken ct);
+
     // Id, daty i Version nadaje baza; zwraca zapisany produkt
     Task<Product> CreateAsync(string name, decimal price, string currency, CancellationToken ct);
 
@@ -19,4 +22,7 @@ public interface IProductRepository
     // Gdy cena i waluta są takie same albo produkt ma inną wersję niż expectedVersion - nic nie zapisuje
     // (PriceUpdate.Changed == false). null = produkt nie istnieje
     Task<PriceUpdate?> ChangePriceAsync(Guid id, decimal price, string currency, int? expectedVersion, CancellationToken ct);
+
+    // Jedna transakcja: produkt z historią cen i kluczami idempotencji; false - produkt nie istnieje
+    Task<bool> DeleteAsync(Guid id, CancellationToken ct);
 }

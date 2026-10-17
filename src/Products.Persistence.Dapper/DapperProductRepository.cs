@@ -18,6 +18,15 @@ internal sealed class DapperProductRepository(DbDataSource dataSource, SqlDialec
         return product?.WithUtcDates();
     }, ct);
 
+    public Task<ProductPage> ListAsync(int skip, int take, CancellationToken ct) => DbRetry.ExecuteAsync(async ct =>
+    {
+        await using var connection = await dataSource.OpenConnectionAsync(ct);
+        await using var results = await connection.QueryMultipleAsync(
+            new CommandDefinition(sql.ListProductsSql, new DbParameters(sql.ListProductsParameters(skip, take)), cancellationToken: ct));
+        var items = (await results.ReadAsync<Product>()).Select(p => p.WithUtcDates()).ToList();
+        return new ProductPage(items, await results.ReadSingleAsync<long>(), skip, take);
+    }, ct);
+
     public Task<Product> CreateAsync(string name, decimal price, string currency, CancellationToken ct) => DbRetry.ExecuteAsync(async ct =>
     {
         await using var connection = await dataSource.OpenConnectionAsync(ct);
@@ -79,5 +88,15 @@ internal sealed class DapperProductRepository(DbDataSource dataSource, SqlDialec
         }
         await transaction.CommitAsync(ct);
         return update;
+    }, ct);
+
+    public Task<bool> DeleteAsync(Guid id, CancellationToken ct) => DbRetry.ExecuteAsync(async ct =>
+    {
+        await using var connection = await dataSource.OpenConnectionAsync(ct);
+        await using var transaction = await connection.BeginTransactionAsync(ct);
+        var deleted = await connection.QueryFirstOrDefaultAsync<Guid?>(new CommandDefinition(
+            sql.DeleteProductSql, new DbParameters(sql.GetProductParameters(id)), transaction, cancellationToken: ct));
+        await transaction.CommitAsync(ct);
+        return deleted is not null;
     }, ct);
 }

@@ -10,7 +10,7 @@ generated: { by: claude-code/claude-opus-5-5, at: 2026-10-15T21:30:00Z }
 # Decyzja
 
 - **Migracje per baza** w osobnych projektach (`Products.Migrations.SqlServer`, `Products.Migrations.Postgres`), każdy z `DesignTimeDbContextFactory` dla `dotnet ef`. Schemat jest wspólny dla EF i Dappera.
-- **Jedna migracja `InitialCreate`**, dopóki projekt nie jest wdrożony; po wdrożeniu każda zmiana to nowa migracja.
+- **Pierwsza migracja `InitialCreate`, każda kolejna zmiana schematu to nowa migracja** (np. `ProductListIndex` - indeks listy produktów). Zmiana zastosowanej już migracji rozjechałaby istniejące bazy z ich historią migracji.
 - **Skrypty `db/<baza>/Create/NNN_*.sql`** (idempotentne) dają ten sam schemat bez EF. `db/merge_files.cmd` scala je do `db/<baza>/Publish/` dla `sqlcmd`/`psql`.
 - **Dwie drogi przy starcie API** (`Database:Schema`):
   - `Migrations` - migracje EF;

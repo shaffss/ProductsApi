@@ -123,6 +123,44 @@ public sealed class ApiEndToEndTests(SqlServerFixture sqlServer, PostgresFixture
         Assert.Equal(first.Headers.Location, retry.Headers.Location);
     }
 
+    [Theory]
+    [MemberData(nameof(Variants))]
+    public async Task List_pages_newest_first_and_delete_removes_product_and_cache_entry(OrmKind orm, DatabaseEngine engine)
+    {
+        await using var factory = await CreateFactoryAsync(orm, engine);
+        var client = factory.CreateClient();
+        List<ProductResponse> created = [];
+        for (var i = 0; i < 3; i++)
+        {
+            using var response = await client.PostAsJsonAsync("/api/products", new { name = $"Czujnik {i}", price = 10m, currency = "PLN" }, Ct);
+            created.Add((await response.Content.ReadFromJsonAsync<ProductResponse>(Ct))!);
+        }
+
+        // własna, pusta baza: dokładnie 3 produkty, od najnowszych
+        var first = await client.GetFromJsonAsync<ProductListResponse>("/api/products?skip=0&take=2", Ct);
+        var last = await client.GetFromJsonAsync<ProductListResponse>("/api/products?skip=2&take=2", Ct);
+        Assert.Equal((3L, 0, 2), (first?.Total, first?.Skip, first?.Take));
+        Assert.Equal([created[2].Id, created[1].Id], first?.Items.Select(p => p.Id));
+        Assert.Equal([created[0].Id], last?.Items.Select(p => p.Id));
+        using (var invalid = await client.GetAsync("/api/products?take=0", Ct))
+            Assert.Equal(HttpStatusCode.BadRequest, invalid.StatusCode);
+
+        // usunięcie czyści też Redis - kolejny odczyt to 404 z bazy, a nie produkt z cache
+        var id = created[0].Id;
+        Assert.Equal("MISS", await GetCacheStatusAsync(client, id));
+        using (var deleted = await client.DeleteAsync($"/api/products/{id}", Ct))
+            Assert.Equal(HttpStatusCode.NoContent, deleted.StatusCode);
+        using (var get = await client.GetAsync($"/api/products/{id}", Ct))
+            Assert.Equal(HttpStatusCode.NotFound, get.StatusCode);
+        using (var again = await client.DeleteAsync($"/api/products/{id}", Ct))
+            Assert.Equal(HttpStatusCode.NotFound, again.StatusCode);
+
+        // frontend z wwwroot pod /
+        using var page = await client.GetAsync("/", Ct);
+        Assert.Equal("text/html", page.Content.Headers.ContentType?.MediaType);
+        Assert.Contains("app.js", await page.Content.ReadAsStringAsync(Ct));
+    }
+
     // Każdy test na własnej, pustej bazie - schemat zakłada API przy starcie, jak w compose: warianty EF z migracji,
     // warianty Dappera ze skryptów. Telemetria wyłączona (appsettings.Development.json wskazuje Aspire Dashboard).
     private async Task<WebApplicationFactory<Program>> CreateFactoryAsync(OrmKind orm, DatabaseEngine engine)

@@ -25,6 +25,15 @@ public sealed partial class SqlDialect
             WHERE "Id" = @id
             """,
 
+        // Strona i liczba wszystkich w jednym poleceniu (dwa wyniki); indeks (CreatedAtUtc, Id) czytany wstecz
+        ListProductsSql = """
+            SELECT "Id", "Name", "Price", "Currency", "CreatedAtUtc", "UpdatedAtUtc", "Version"
+            FROM "Products"
+            ORDER BY "CreatedAtUtc" DESC, "Id" DESC
+            OFFSET @skip LIMIT @take;
+            SELECT count(*) FROM "Products";
+            """,
+
         InsertProductSql = """
             INSERT INTO "Products" ("Name", "Price", "Currency")
             VALUES (@name, @price, @currency)
@@ -76,6 +85,18 @@ public sealed partial class SqlDialect
             SELECT "Id", "Name", "Price", "Currency", "CreatedAtUtc", "UpdatedAtUtc", "Version", NULL, NULL
             FROM "Products"
             WHERE "Id" = @id AND NOT EXISTS (SELECT 1 FROM changed)
+            """,
+
+        // Jedno polecenie (atomowe): klucze idempotencji, historia i produkt. Klucze obce bez kaskady
+        // sprawdzane są na końcu polecenia, gdy wiersze zależne są już usunięte. Brak wiersza = brak produktu.
+        DeleteProductSql = """
+            WITH keys AS (
+                DELETE FROM "IdempotencyKeys" WHERE "ProductId" = @id
+            ), history AS (
+                DELETE FROM "ProductPriceHistory" WHERE "ProductId" = @id
+            )
+            DELETE FROM "Products" WHERE "Id" = @id
+            RETURNING "Id"
             """,
 
         InsertOutboxMessageSql = """

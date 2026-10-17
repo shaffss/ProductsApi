@@ -8,5 +8,6 @@ namespace Products.Api.Contracts;
 [JsonSerializable(typeof(CreateProductRequest))]
 [JsonSerializable(typeof(ChangePriceRequest))]
 [JsonSerializable(typeof(ProductResponse))]
+[JsonSerializable(typeof(ProductListResponse))]
 [JsonSerializable(typeof(HealthResponse))]
 internal sealed partial class ApiJsonContext : JsonSerializerContext;

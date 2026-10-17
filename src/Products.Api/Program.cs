@@ -49,8 +49,11 @@ if (app.Environment.IsDevelopment())
 {
     app.MapOpenApi(); // /openapi/v1.json
     app.UseSwaggerUI(o => o.SwaggerEndpoint("/openapi/v1.json", "Products API")); // /swagger
-    app.MapGet("/", () => Results.Redirect("/swagger")).ExcludeFromDescription();
 }
+
+// Frontend pod / (wwwroot/index.html): grid produktów - statyczna strona na tym samym originie co API
+app.UseDefaultFiles();
+app.UseStaticFiles();
 
 app.MapProductEndpoints();
 app.MapHealthEndpoints();

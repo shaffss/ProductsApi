@@ -12,7 +12,7 @@ Kolumny i typy są w migracjach ([SQL Server](../../../src/Products.Migrations.S
 | Tabela | Przeznaczenie | Klucze i indeksy |
 |---|---|---|
 | `Currencies` | słownik walut - [decyzja](../decisions/currency-dictionary.md) | PK `Id`, unikalny `Code` |
-| `Products` | produkty; `Version` rośnie przy każdej zmianie | PK `Id` (sekwencyjny), FK `Currency` → `Currencies.Code`, CHECK: niepusta nazwa i cena > 0 |
+| `Products` | produkty; `Version` rośnie przy każdej zmianie | PK `Id` (sekwencyjny), FK `Currency` → `Currencies.Code`, CHECK: niepusta nazwa i cena > 0; indeks `(CreatedAtUtc, Id)` - [lista od najnowszych](../flows/list-and-delete.md) |
 | `ProductPriceHistory` | stara i nowa cena oraz waluta przy każdej zmianie | FK `ProductId`, indeks `(ProductId, ChangedAtUtc)` |
 | `OutboxMessages` | zdarzenia do wysłania - [Outbox](../mechanisms/outbox.md) | PK `Id` (kolejność wysyłki); filtrowane: `IX_OutboxMessages_Pending` (niewysłane) i `IX_OutboxMessages_ProcessedAtUtc` (wysłane, retencja) |
 | `ProcessedEvents` | zdarzenia obsłużone przez odbiorcę - [Inbox](../mechanisms/inbox.md) | PK `(Consumer, EventId)`, indeks `ProcessedAtUtc` (retencja) |

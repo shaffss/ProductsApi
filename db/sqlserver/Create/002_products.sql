@@ -23,3 +23,9 @@ IF OBJECT_ID(N'dbo.Products', N'U') IS NULL
         CONSTRAINT CK_Products_Price_Positive CHECK (Price > 0)
     );
 GO
+
+-- lista od najnowszych (GET /api/products) - indeks czytany wstecz, Id rozstrzyga równe daty
+IF INDEXPROPERTY(OBJECT_ID(N'dbo.Products'), N'IX_Products_CreatedAtUtc_Id', N'IndexId') IS NULL
+    CREATE INDEX IX_Products_CreatedAtUtc_Id
+        ON dbo.Products (CreatedAtUtc, Id);
+GO

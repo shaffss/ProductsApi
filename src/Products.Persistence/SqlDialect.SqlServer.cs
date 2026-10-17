@@ -25,6 +25,15 @@ public sealed partial class SqlDialect
             WHERE Id = @id
             """,
 
+        // Strona i liczba wszystkich w jednym poleceniu (dwa wyniki); indeks (CreatedAtUtc, Id) czytany wstecz
+        ListProductsSql = """
+            SELECT Id, Name, Price, Currency, CreatedAtUtc, UpdatedAtUtc, Version
+            FROM dbo.Products
+            ORDER BY CreatedAtUtc DESC, Id DESC
+            OFFSET @skip ROWS FETCH NEXT @take ROWS ONLY;
+            SELECT COUNT_BIG(*) FROM dbo.Products;
+            """,
+
         InsertProductSql = """
             INSERT dbo.Products (Name, Price, Currency)
             OUTPUT inserted.Id, inserted.Name, inserted.Price, inserted.Currency,
@@ -81,6 +90,14 @@ public sealed partial class SqlDialect
             FROM dbo.Products p
             LEFT JOIN @changed c ON 1 = 1
             WHERE p.Id = @id;
+            """,
+
+        // W transakcji wywołującego (klucze obce bez kaskady): klucze idempotencji, historia i produkt.
+        // Brak wiersza = brak produktu.
+        DeleteProductSql = """
+            DELETE dbo.IdempotencyKeys WHERE ProductId = @id;
+            DELETE dbo.ProductPriceHistory WHERE ProductId = @id;
+            DELETE dbo.Products OUTPUT deleted.Id WHERE Id = @id;
             """,
 
         InsertOutboxMessageSql = """

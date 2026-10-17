@@ -171,6 +171,39 @@ public abstract class ProductRepositoryTests(DatabaseFixture database, OrmKind o
     }
 
     [Fact]
+    public async Task List_returns_newest_first_with_total()
+    {
+        var before = (await _repository.ListAsync(0, 1, Ct)).Total;
+        List<Product> created = [];
+        for (var i = 0; i < 3; i++)
+            created.Add(await _repository.CreateAsync($"Czujnik listy {i}", 10m + i, "PLN", Ct));
+
+        var page = await _repository.ListAsync(0, 3, Ct);
+        var second = await _repository.ListAsync(1, 1, Ct);
+
+        Assert.Equal(before + 3, page.Total);
+        Assert.Equal(created.Select(p => p.Id).Reverse(), page.Items.Select(p => p.Id));
+        Assert.Equal(created[1].Id, second.Items.Single().Id);
+        Assert.Equal((1, 1), (second.Skip, second.Take));
+        Assert.All(page.Items, p => Assert.Equal(DateTimeKind.Utc, p.UpdatedAtUtc.Kind));
+    }
+
+    [Fact]
+    public async Task Delete_removes_product_with_price_history_and_idempotency_key()
+    {
+        var key = new IdempotencyKey { Key = $"key-{Guid.NewGuid():N}", RequestHash = new byte[32] };
+        var product = (await _repository.TryCreateAsync("Czujnik do usunięcia", 10m, "PLN", key, Ct))!;
+        await _repository.ChangePriceAsync(product.Id, 12m, "PLN", null, Ct);
+
+        Assert.True(await _repository.DeleteAsync(product.Id, Ct));
+
+        Assert.Null(await _repository.GetAsync(product.Id, Ct));
+        Assert.Empty(await _db.GetHistoryAsync(product.Id));
+        Assert.False(await _db.IdempotencyKeyExistsAsync(key.Key));
+        Assert.False(await _repository.DeleteAsync(product.Id, Ct)); // już nie istnieje
+    }
+
+    [Fact]
     public async Task Currencies_are_seeded_by_migration()
     {
         var currencies = await _services.GetRequiredService<ICurrencyRepository>().GetActiveAsync(Ct);
