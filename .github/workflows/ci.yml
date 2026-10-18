@@ -12,7 +12,9 @@ concurrency:
 
 jobs:
   build-test:
-    runs-on: ubuntu-latest
+    # przypięta wersja: ubuntu-latest przechodzi na Ubuntu 26 od 19.10.2026 - zmiana obrazu runnera (Docker,
+    # biblioteki systemowe) nie może bez zapowiedzi zmienić wyniku testów
+    runs-on: ubuntu-24.04
     timeout-minutes: 30
     steps:
       - uses: actions/checkout@v7

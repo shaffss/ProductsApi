@@ -1,6 +1,7 @@
 # Historia zmian
 
 ## 2026-10-18
+* **Aktualizacja**: niestabilny test zmiany ceny na SQL Server w CI (ten sam znacznik czasu) poprawiony, runner przypięty do `ubuntu-24.04` - [testy i CI](playbooks/run-tests.md).
 * **Aktualizacja**: diagram bazy (Mermaid) w [schemacie bazy](contracts/database-schema.md), odnośnik w README.
 * **Aktualizacja**: profil compose `tools` z kafka-ui i RedisInsight do podglądu Kafki i Redisa w przeglądarce - [uruchomienie lokalne](playbooks/run-locally.md), [wersje obrazów](decisions/container-image.md).
 

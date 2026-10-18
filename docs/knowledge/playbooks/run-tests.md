@@ -25,6 +25,7 @@ dotnet format Products.slnx --verify-no-changes      # styl i analizatory, jak w
 - xUnit v3 działa przez Microsoft.Testing.Platform (`global.json`: `test.runner`).
 - Ostrzeżenia są błędami (`AnalysisLevel=latest-recommended`); wyjątki z uzasadnieniem są w `.editorconfig`.
 - `KnowledgeBundleTests` sprawdza tę bazę wiedzy: pole `type` w każdym pojęciu oraz istniejące linki i ścieżki `resource`.
-- CI (GitHub Actions): restore, format, build Release, testy jednostkowe i integracyjne (Docker na runnerze), `docker build`.
+- CI (GitHub Actions): restore, format, build Release, testy jednostkowe i integracyjne (Docker na runnerze), `docker build`. Runner przypięty do `ubuntu-24.04` - zmiana obrazu `ubuntu-latest` nie zmienia wyniku testów bez zapowiedzi.
+- Testy nie zależą od rozdzielczości zegara bazy: SQL Server na runnerze potrafi dać ten sam znacznik czasu dla dwóch zapisów w ciągu kilku milisekund, więc test porównujący daty najpierw cofa datę w bazie (`TestDatabase.SetDateAsync`).
 
 Powiązane: [Uruchomienie lokalne](run-locally.md)

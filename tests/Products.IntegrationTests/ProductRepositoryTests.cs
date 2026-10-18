@@ -65,6 +65,10 @@ public abstract class ProductRepositoryTests(DatabaseFixture database, OrmKind o
     public async Task ChangePrice_returns_previous_price_and_records_history_and_event()
     {
         var created = await _repository.CreateAsync("Sterownik PLC", 100m, "PLN", Ct);
+        // data zmiany minutę wstecz: zmiana ceny tuż po utworzeniu (ten sam takt zegara bazy, np. SQL Server
+        // na runnerze CI) dałaby ten sam znacznik czasu, a test ma sprawdzić, że zmiana odświeża UpdatedAtUtc
+        var before = created.UpdatedAtUtc.AddMinutes(-1);
+        await _db.SetDateAsync("Products", "UpdatedAtUtc", "Id", created.Id, before);
 
         var update = await _repository.ChangePriceAsync(created.Id, 90.5m, "EUR", expectedVersion: null, Ct);
 
@@ -73,7 +77,7 @@ public abstract class ProductRepositoryTests(DatabaseFixture database, OrmKind o
         Assert.Equal((100m, "PLN"), (update.OldPrice, update.OldCurrency));
         Assert.Equal((90.5m, "EUR", 2), (update.Product.Price, update.Product.Currency, update.Product.Version));
         Assert.Equal(created.Name, update.Product.Name);
-        Assert.True(update.Product.UpdatedAtUtc > created.UpdatedAtUtc);
+        Assert.True(update.Product.UpdatedAtUtc > before);
 
         Assert.Equal([(100m, 90.5m)], await _db.GetHistoryAsync(created.Id));
         var outbox = Assert.Single(await _db.GetOutboxAsync(created.Id));
