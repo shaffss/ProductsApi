@@ -1,5 +1,8 @@
 # Historia zmian
 
+## 2026-10-18
+* **Aktualizacja**: profil compose `tools` z kafka-ui i RedisInsight do podglądu Kafki i Redisa w przeglądarce - [uruchomienie lokalne](playbooks/run-locally.md), [wersje obrazów](decisions/container-image.md).
+
 ## 2026-10-17
 * **Aktualizacja**: launcher na Linuksie - menu w terminalu (bash i whiptail) z tymi samymi opcjami i startem kontenerów ([uruchomienie lokalne](playbooks/run-locally.md)).
 * **Utworzenie**: decyzja [Produkty nie są usuwane](decisions/no-product-deletion.md) - usuwanie wyłączone w całym systemie, kod zakomentowany; aktualizacja [przepływu listy i gridu](flows/list-and-delete.md) i [kontraktu HTTP](contracts/http-api.md).

@@ -19,6 +19,8 @@ generated: { by: claude-code/claude-opus-5-5, at: 2026-10-15T21:30:00Z }
   | Redis | `8.10.2` |
   | Kafka | `4.3.1` |
   | Aspire Dashboard | `13.6.1` |
+  | kafka-ui (profil `tools`) | `v1.5.0` |
+  | RedisInsight (profil `tools`) | `3.8.0` |
 
 - **`stop_grace_period`:**
   - API: 40 s, czyli dłużej niż `ShutdownTimeout` .NET (30 s) - zatwierdzenie offsetów Kafki i dokończenie wysyłki;

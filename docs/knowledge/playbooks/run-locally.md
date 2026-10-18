@@ -19,6 +19,11 @@ docker compose --profile "*" down                         # zatrzymanie i usuni�
 
 - **Profile wariantów:** `efcore-postgres` (8081), `efcore-sqlserver` (8082), `dapper-postgres` (8083), `dapper-sqlserver` (8084). Każdy uruchamia tylko minimum dla wariantu, bo zawsze działa jeden.
 - **Aspire Dashboard** (18888) dochodzi z `--profile observability`. Bez niego API pomija telemetrię.
+- **Podgląd Kafki i Redisa** w przeglądarce dochodzi z `--profile tools`, np. `docker compose --profile efcore-postgres --profile tools up -d`:
+  - kafka-ui (http://localhost:8090): topiki, wiadomości z kluczem i nagłówkami (`event-type`, `traceparent`), grupy konsumentów i ich zaległości;
+  - RedisInsight (http://localhost:5540): klucze `product:{id}`, ich JSON i TTL; połączenie z Redisem z compose jest skonfigurowane z góry.
+
+  Bez logowania (tylko lokalnie). Bez profilu to samo dają narzędzia w kontenerach: `redis-cli` w `redis` i skrypty `/opt/kafka/bin/*.sh` w `rekrutacja-kafka`.
 - **Sprzątanie:**
   - `down` usuwa kontenery i sieć, a dane zostają w wolumenach; `down -v` usuwa także dane.
   - Samo `docker compose down` pomija kontenery z profili, których polecenie nie wskazuje, stąd `--profile "*"`.

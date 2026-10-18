@@ -28,6 +28,7 @@ docker compose --profile efcore-postgres up -d
 | `dapper-sqlserver` | http://localhost:8084 | http://localhost:8084/swagger | SQL Server |
 
 - **Aspire Dashboard** (ślady, metryki i logi, http://localhost:18888) jest opcjonalny: dodaj `--profile observability`. Bez niego API pomija wysyłkę telemetrii.
+- **Podgląd Kafki i Redisa** w przeglądarce (opcjonalny): dodaj `--profile tools`. Uruchamia kafka-ui (http://localhost:8090: topiki, wiadomości z nagłówkami, grupy konsumentów) i RedisInsight (http://localhost:5540: klucze `product:{id}` z TTL), bez logowania.
 - **Bez profilu** `docker compose up -d` uruchamia samą infrastrukturę domyślnego wariantu (PostgreSQL, Redis, Kafka) pod `dotnet run`, zgodnie z sekwencją z zadania. Domyślny profil jest w pliku `.env`.
 - **Zatrzymanie:** `docker compose --profile "*" down` usuwa wszystkie kontenery projektu, a dane zostają w wolumenach. Samo `docker compose down` pomija kontenery z profili, których polecenie nie wskazuje. Kontenery nie mają polityki restartu, więc po restarcie Dockera nic nie wstaje samo.
 

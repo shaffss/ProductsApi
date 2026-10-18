@@ -10,6 +10,8 @@ name: rekrutacja
 #     efcore-postgres  http://localhost:8081      dapper-postgres  http://localhost:8083
 #     efcore-sqlserver http://localhost:8082      dapper-sqlserver http://localhost:8084
 #   --profile observability                         dodatkowo Aspire Dashboard (http://localhost:18888)
+#   --profile tools                                 dodatkowo podgląd Kafki (kafka-ui, http://localhost:8090)
+#                                                   i Redisa (RedisInsight, http://localhost:5540)
 #   docker compose --profile "*" down               zatrzymuje i usuwa wszystkie kontenery (dane zostają w wolumenach;
 #                                                   samo "down" pomija kontenery z profili, które nie są aktywne)
 # Bez polityki restartu: po restarcie Dockera nic nie wstaje samo, działa tylko to, co uruchomisz.
@@ -164,6 +166,36 @@ services:
     ports:
       - "18888:18888" # UI
       - "4317:18889" # OTLP (gRPC) z hosta, np. dotnet run; z kontenerów: aspire-dashboard:18889
+
+  # Podgląd zawartości Kafki i Redisa w przeglądarce (profil tools, opcjonalnie). Bez logowania - tylko lokalnie.
+  # kafka-ui: topiki, wiadomości z kluczem i nagłówkami (event-type, traceparent), grupy konsumentów i zaległości
+  kafka-ui:
+    image: kafbat/kafka-ui:v1.5.0
+    container_name: rekrutacja-kafka-ui # nazwa kafka-ui bywa zajęta przez inne projekty
+    profiles: [tools]
+    environment:
+      KAFKA_CLUSTERS_0_NAME: rekrutacja
+      KAFKA_CLUSTERS_0_BOOTSTRAPSERVERS: kafka:9092
+      JAVA_OPTS: -Xmx256m # domyślnie 1/4 pamięci Dockera
+    ports:
+      - "8090:8080"
+    depends_on:
+      kafka: { condition: service_started }
+
+  # RedisInsight: klucze product:{id}, ich JSON i TTL; połączenie z Redisem z compose skonfigurowane z góry
+  redisinsight:
+    image: redis/redisinsight:3.8.0
+    container_name: redisinsight
+    profiles: [tools]
+    environment:
+      RI_ACCEPT_TERMS_AND_CONDITIONS: "true" # bez okna z warunkami przy pierwszym wejściu
+      RI_REDIS_HOST: redis
+      RI_REDIS_PORT: "6379"
+      RI_REDIS_ALIAS: rekrutacja
+    ports:
+      - "5540:5540"
+    depends_on:
+      redis: { condition: service_started }
 
   # Warianty API - każdy we własnym profilu. Uruchomione razem (kilka --profile) też działają poprawnie:
   # każdy ma własną grupę konsumentów Kafki (loguje wszystkie zdarzenia, także z drugiej bazy), a dwa warianty
