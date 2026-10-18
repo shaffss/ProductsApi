@@ -226,6 +226,8 @@ postman/                          kolekcja i środowiska Postmana
 .github/workflows/                CI
 ```
 
+**Diagram bazy** (tabele, klucze i powiązania, wspólny dla PostgreSQL i SQL Server): [docs/knowledge/contracts/database-schema.md](docs/knowledge/contracts/database-schema.md).
+
 ### Odczyt produktu (cache-aside)
 
 1. `GET product:{id}` z Redisa: przy trafieniu odpowiedź bez zapytania do bazy (`X-Cache: HIT`).
